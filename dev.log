@@ -1,0 +1,52 @@
+
+> orient2work@0.1.0 dev
+> next dev -p 3009
+
+   ▲ Next.js 15.1.6
+   - Local:        http://localhost:3009
+   - Network:      http://192.168.11.105:3009
+   - Experiments (use with caution):
+     · cpus
+
+ ✓ Starting...
+ ✓ Ready in 8.2s
+ ○ Compiling /espace-jeune/formations/[id] ...
+ ✓ Compiled /espace-jeune/formations/[id] in 22s (881 modules)
+ GET /espace-jeune/formations/f1 200 in 38899ms
+ GET /espace-jeune/formations/f1 200 in 505ms
+ ✓ Compiled in 8.9s (412 modules)
+ ✓ Compiled in 2.2s (412 modules)
+ ✓ Compiled in 2.2s (412 modules)
+ ✓ Compiled in 406ms (412 modules)
+ ✓ Compiled in 822ms (412 modules)
+ ✓ Compiled in 402ms (412 modules)
+ ✓ Compiled in 433ms (412 modules)
+ ✓ Compiled in 1050ms (412 modules)
+ ✓ Compiled in 520ms (412 modules)
+ ✓ Compiled in 511ms (412 modules)
+ ✓ Compiled in 3s (412 modules)
+ ✓ Compiled in 2.1s (412 modules)
+ ✓ Compiled in 4.4s (412 modules)
+ ✓ Compiled in 2.5s (412 modules)
+ ✓ Compiled in 1774ms (412 modules)
+ ✓ Compiled in 26.2s (412 modules)
+ ✓ Compiled in 5.7s (413 modules)
+ ✓ Compiled in 871ms (413 modules)
+ ✓ Compiled in 2.7s (413 modules)
+ ✓ Compiled in 3.4s (413 modules)
+ ✓ Compiled in 3s (413 modules)
+ ✓ Compiled in 3.3s (415 modules)
+ ✓ Compiled in 2.4s (415 modules)
+ ✓ Compiled in 2.7s (415 modules)
+ ✓ Compiled in 1657ms (415 modules)
+ ✓ Compiled in 1706ms (415 modules)
+ ✓ Compiled in 1866ms (415 modules)
+ ✓ Compiled in 4.1s (415 modules)
+ ✓ Compiled in 11.2s (415 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\Users\mourad\Desktop\My Projects\orient2work-v2\.next\cache\webpack\client-development\12.pack.gz_' -> 'C:\Users\mourad\Desktop\My Projects\orient2work-v2\.next\cache\webpack\client-development\12.pack.gz'
+ ✓ Compiled in 1693ms (415 modules)
+ ✓ Compiled in 1147ms (415 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\Users\mourad\Desktop\My Projects\orient2work-v2\.next\cache\webpack\client-development\1.pack.gz_' -> 'C:\Users\mourad\Desktop\My Projects\orient2work-v2\.next\cache\webpack\client-development\1.pack.gz'
+ ✓ Compiled in 1447ms (415 modules)
+ ✓ Compiled in 1199ms (415 modules)
+ ✓ Compiled in 813ms (415 modules)
