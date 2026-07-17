@@ -9,8 +9,6 @@ export interface NavItem {
 export const publicNav: NavItem[] = [
   { label: "Pour les jeunes", href: "/jeunes", icon: "school" },
   { label: "Pour les entreprises", href: "/entreprises", icon: "business" },
-  { label: "Formations", href: "/formations", icon: "menu_book" },
-  { label: "Offres", href: "/offres", icon: "work" },
   { label: "À propos", href: "/a-propos", icon: "info" },
   { label: "Contact", href: "/contact", icon: "mail" },
 ];

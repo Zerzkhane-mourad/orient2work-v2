@@ -16,8 +16,6 @@ const footerColumns = [
     links: [
       { label: "Pour les jeunes", href: "/jeunes" },
       { label: "Pour les entreprises", href: "/entreprises" },
-      { label: "Offres d'emploi", href: "/offres" },
-      { label: "Formations", href: "/formations" },
     ],
   },
   {
