@@ -37,9 +37,9 @@ export default function JeunesPage() {
               <ButtonLink href="/inscription?role=jeune" variant="secondary" size="lg">
                 Créer mon profil
               </ButtonLink>
-              <ButtonLink href="/formations" variant="outline" size="lg">
+              {/* <ButtonLink href="/formations" variant="outline" size="lg">
                 Voir les formations
-              </ButtonLink>
+              </ButtonLink> */}
             </div>
           </div>
           <Card className="p-8">
