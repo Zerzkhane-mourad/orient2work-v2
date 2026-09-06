@@ -1,30 +1,52 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Icon, ProgressBar, StarRating } from "@/components/ui";
-import type { Formation } from "@/lib/types";
-import { cn, countChapitres } from "@/lib/utils";
+import { mediaUrl } from "@/lib/api/urls";
+import type { ApiFormationSummary } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 
 interface FormationCardProps {
-  formation: Formation;
+  formation: ApiFormationSummary;
   href?: string;
 }
 
 /** Udemy-style course card: thumbnail, title, instructor, rating and meta. */
 export function FormationCard({ formation, href = "#" }: FormationCardProps) {
   const f = formation;
+  // Média public : une URL absolue suffit, pas de `blob:` comme pour les
+  // documents protégés.
+  const cover = mediaUrl(f.image);
   const started = f.progression > 0;
   const done = f.progression >= 100;
 
   return (
     <Link
       href={href}
-      className="group flex flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest transition-shadow hover:shadow-level-2"
+      className="group flex flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest transition-shadow hover:shadow-level-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
     >
       {/* Thumbnail */}
-      <div className="relative flex aspect-video items-center justify-center bg-gradient-to-br from-primary to-primary-container">
-        <Icon
-          name="auto_stories"
-          className="text-4xl text-white/85 transition-transform group-hover:scale-110"
-        />
+      {/* `inverse-surface` → `primary` et non `primary` → `primary-container` :
+          ces deux-là valent la MÊME couleur dans la palette (#0b1f3a), le
+          dégradé annoncé était donc un aplat. */}
+      <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-gradient-to-br from-inverse-surface to-primary">
+        {/* Sans couverture, le dégradé et l'icône font office de vignette : une
+            formation reste publiable sans visuel. */}
+        {cover ? (
+          <Image
+            src={cover}
+            alt=""
+            fill
+            // Doit suivre la grille du catalogue (1 / 2 / 3 / 4 colonnes) :
+            // une valeur trop basse sert une image floue en pleine largeur.
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            className="object-cover transition-transform group-hover:scale-105"
+          />
+        ) : (
+          <Icon
+            name="auto_stories"
+            className="text-4xl text-white/85 transition-transform group-hover:scale-110"
+          />
+        )}
         <span className="absolute left-2 top-2 rounded bg-black/40 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
           {f.categorie}
         </span>
@@ -49,7 +71,8 @@ export function FormationCard({ formation, href = "#" }: FormationCardProps) {
             <Icon name="timer" className="text-[14px]" /> {f.tempsLectureMin} min
           </span>
           <span aria-hidden>·</span>
-          <span>{countChapitres(f.contenuHtml)} chapitres</span>
+          {/* Compté côté serveur : la liste ne transporte pas le contenu du cours. */}
+          <span>{f.nombreChapitres} chapitres</span>
           {f.niveau && (
             <>
               <span aria-hidden>·</span>
@@ -69,7 +92,7 @@ export function FormationCard({ formation, href = "#" }: FormationCardProps) {
                   done ? "text-success" : "text-on-surface-variant",
                 )}
               >
-                {done ? "Terminé · Certificat disponible" : `${f.progression}% complété`}
+                {done ? "Terminé" : `${f.progression}% complété`}
               </p>
             </div>
           ) : (

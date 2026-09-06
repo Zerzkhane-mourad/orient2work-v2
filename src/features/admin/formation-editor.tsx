@@ -10,21 +10,28 @@ import {
   CardHeader,
   CardTitle,
   Icon,
+  ImageUpload,
   Input,
   RichText,
   RichTextEditor,
+  optionsFromLabels,
   Select,
   Textarea,
 } from "@/components/ui";
-import { FILIERES, FORMATION_CATEGORIES } from "@/lib/constants";
-import type { Formation } from "@/lib/types";
+import { api } from "@/lib/api";
+import type { ApiFormation } from "@/lib/api/types";
+import { useMutation } from "@/lib/api/use-api";
+import { useCategories, useFilieres } from "./use-referentiel";
+import { FormationQuizEditor } from "./formation-quiz-editor";
+import { mediaUrl } from "@/lib/api/urls";
 import { cn, countChapitres } from "@/lib/utils";
+import { ErrorBanner } from "@/components/ui";
 
 const NIVEAUX = ["Débutant", "Intermédiaire", "Avancé", "Tous niveaux"] as const;
 
 interface FormationEditorProps {
   /** Existing formation to edit; omit to create a new one. */
-  formation?: Formation;
+  formation?: ApiFormation;
 }
 
 const EMPTY_CONTENT = "<h2>Premier chapitre</h2><p>Rédigez le contenu du cours ici…</p>";
@@ -41,42 +48,105 @@ export function FormationEditor({ formation }: FormationEditorProps) {
   const [titre, setTitre] = useState(formation?.titre ?? "");
   const [sousTitre, setSousTitre] = useState(formation?.sousTitre ?? "");
   const [description, setDescription] = useState(formation?.description ?? "");
-  const [categorie, setCategorie] = useState<string>(formation?.categorie ?? "");
-  const [filiere, setFiliere] = useState<string>(formation?.filiere ?? "");
+  // La catégorie est portée par son IDENTIFIANT : c'est ce que l'API attend, et
+  // un renommage en cours d'édition ne casse donc pas l'enregistrement.
+  const [categorieId, setCategorieId] = useState<string>(formation?.categorieId ?? "");
+
+  const { categories } = useCategories("publiques");
+  const { filieres } = useFilieres();
+
+  // Si la formation éditée porte une catégorie désormais désactivée, on la garde
+  // dans la liste : sans cela le `<select>` afficherait un choix vide et
+  // l'enregistrement changerait sa catégorie à l'insu de l'administrateur.
+  const choixCategories =
+    formation?.categorieId && !categories.some((c) => c.id === formation.categorieId)
+      ? [...categories, { id: formation.categorieId, nom: `${formation.categorie} (désactivée)` }]
+      : categories;
+  const [filiereId, setFiliereId] = useState<string>(formation?.filiereId ?? "");
   const [niveau, setNiveau] = useState<string>(formation?.niveau ?? "Débutant");
   const [tempsLecture, setTempsLecture] = useState(String(formation?.tempsLectureMin ?? 5));
   const [certifiante, setCertifiante] = useState(formation?.certifiante ?? true);
   const [objectifs, setObjectifs] = useState((formation?.objectifs ?? []).join("\n"));
   const [prerequis, setPrerequis] = useState((formation?.prerequis ?? []).join("\n"));
   const [contenuHtml, setContenuHtml] = useState(formation?.contenuHtml ?? EMPTY_CONTENT);
+
+  // Deux états pour la couverture : l'aperçu affiché (URL existante ou data URL
+  // du fichier choisi) et le fichier lui-même, envoyé APRÈS l'enregistrement.
+  const [apercuImage, setApercuImage] = useState<string | undefined>(
+    formation?.image ? mediaUrl(formation.image) : undefined,
+  );
+  const [fichierImage, setFichierImage] = useState<File | undefined>();
   const [preview, setPreview] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // La formation côté serveur : `null` tant qu'elle n'existe pas. Les opérations
+  // sur le quiz la renvoient à jour, ce qui évite de recharger la page.
+  const [courante, setCourante] = useState<ApiFormation | null>(formation ?? null);
+
   const chapitres = countChapitres(contenuHtml);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // No backend yet: the payload below is what a POST/PUT would send.
-    const payload: Partial<Formation> = {
+  // La filière ne se saisit que pour les formations de spécialité — règle métier
+  // portée par le LIBELLÉ, qu'il faut donc retrouver depuis l'identifiant.
+  const categorieChoisie = choixCategories.find((c) => c.id === categorieId)?.nom;
+
+  const { run, pending, error } = useMutation(async (): Promise<ApiFormation> => {
+    // Le contenu HTML est assaini côté serveur avant persistance : seule une
+    // liste blanche de balises et d'attributs survit.
+    const payload = {
       titre,
-      sousTitre,
+      // Les champs facultatifs vides sont omis : les schémas backend sont
+      // stricts et refuseraient une chaîne vide là où ils attendent une
+      // valeur du référentiel.
+      ...(sousTitre.trim() ? { sousTitre: sousTitre.trim() } : {}),
       description,
-      categorie: categorie as Formation["categorie"],
-      filiere: (filiere || undefined) as Formation["filiere"],
-      niveau: niveau as Formation["niveau"],
+      categorieId,
+      ...(filiereId ? { filiereId } : {}),
+      ...(niveau ? { niveau } : {}),
       tempsLectureMin: Number(tempsLecture),
       certifiante,
-      objectifs: objectifs.split("\n").map((s) => s.trim()).filter(Boolean),
-      prerequis: prerequis.split("\n").map((s) => s.trim()).filter(Boolean),
+      objectifs: objectifs
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      prerequis: prerequis
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
       contenuHtml,
     };
-    console.info("Formation à enregistrer :", payload);
+
+    const cible = courante ?? formation;
+    const enregistree = cible
+      ? await api.admin.updateFormation(cible.id, payload)
+      : await api.admin.createFormation(payload);
+
+    // La couverture part ensuite : à la création, la formation n'a d'identifiant
+    // qu'une fois enregistrée. En cas d'échec ici, le contenu reste sauvegardé.
+    const finale = fichierImage
+      ? await api.admin.uploadFormationImage(enregistree.id, fichierImage)
+      : enregistree;
+
+    // Une création vient de produire un identifiant : le bloc quiz s'active.
+    setCourante(finale);
+    return finale;
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = await run();
+    if (!result) return;
     setSaved(true);
-    setTimeout(() => router.push("/admin/formations"), 800);
+
+    setTimeout(() => {
+      // Après une CRÉATION on reste sur la formation : le quiz se compose
+      // ensuite, et renvoyer à la liste obligerait à la rouvrir aussitôt.
+      router.push(isEdit ? "/admin/formations" : `/admin/formations/${result.id}`);
+      router.refresh();
+    }, 800);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -92,11 +162,14 @@ export function FormationEditor({ formation }: FormationEditorProps) {
           <ButtonLink href="/admin/formations" variant="ghost">
             Annuler
           </ButtonLink>
-          <Button type="submit" variant="secondary">
-            <Icon name="save" className="text-[18px]" /> {isEdit ? "Enregistrer" : "Créer"}
+          <Button type="submit" variant="secondary" disabled={pending}>
+            <Icon name="save" className="text-[18px]" />
+            {pending ? "Enregistrement…" : isEdit ? "Enregistrer" : "Créer"}
           </Button>
         </div>
       </div>
+
+      {error && <ErrorBanner error={error} />}
 
       {saved && (
         <div className="flex items-center gap-2 rounded-lg bg-success-container px-4 py-3 text-sm font-semibold text-success">
@@ -174,6 +247,20 @@ export function FormationEditor({ formation }: FormationEditorProps) {
               />
             </CardBody>
           </Card>
+
+          {/* Le quiz suppose une formation qui existe : ses questions portent des
+              identifiants auxquels les tentatives font référence. À la création,
+              on enregistre d'abord, on compose le quiz ensuite. */}
+          {courante ? (
+            <FormationQuizEditor formation={courante} onChange={setCourante} />
+          ) : (
+            <Card className="border-dashed">
+              <CardBody className="flex items-start gap-3 text-sm text-on-surface-variant">
+                <Icon name="quiz" className="mt-0.5 shrink-0 text-secondary" />
+                <p>Le test de la formation se compose une fois celle-ci enregistrée.</p>
+              </CardBody>
+            </Card>
+          )}
         </div>
 
         {/* Meta */}
@@ -183,6 +270,22 @@ export function FormationEditor({ formation }: FormationEditorProps) {
               <CardTitle>Informations</CardTitle>
             </CardHeader>
             <CardBody className="space-y-5">
+              {/* Le composant produit un aperçu redimensionné pour l'affichage ET
+                  conserve le fichier d'origine : c'est lui qui part à l'API, qui
+                  vérifie type MIME, extension, signature binaire et taille. */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-on-surface">Couverture</span>
+                <ImageUpload
+                  value={apercuImage}
+                  onChange={setApercuImage}
+                  onFile={setFichierImage}
+                  shape="wide"
+                  maxWidth={1280}
+                  maxHeight={720}
+                  emptyLabel="Ajouter une couverture"
+                  hint="JPG, PNG ou WebP — format 16/9 conseillé, 5 Mo maximum."
+                />
+              </div>
               <Input
                 label="Titre"
                 required
@@ -202,32 +305,35 @@ export function FormationEditor({ formation }: FormationEditorProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
+              {/* Référentiel administrable : les catégories désactivées ne sont
+                  pas proposées, mais une formation qui en utilise une conserve la
+                  sienne (ajoutée ci-dessus). La valeur est l'identifiant, le
+                  libellé n'est qu'un affichage. */}
               <Select
                 label="Catégorie"
                 required
-                value={categorie}
-                onChange={(e) => setCategorie(e.target.value)}
-              >
-                <option value="" disabled>
-                  Sélectionnez…
-                </option>
-                {[...FORMATION_CATEGORIES, "Spécialité"].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Select>
-              {categorie === "Spécialité" && (
-                <Select label="Filière" value={filiere} onChange={(e) => setFiliere(e.target.value)}>
-                  <option value="">Toutes les filières</option>
-                  {FILIERES.map((f) => (
-                    <option key={f}>{f}</option>
-                  ))}
-                </Select>
+                value={categorieId}
+                onChange={setCategorieId}
+                error={error?.issueFor("categorieId")}
+                options={choixCategories.map((c) => ({ value: c.id, label: c.nom }))}
+              />
+              {categorieChoisie === "Spécialité" && (
+                <Select
+                  label="Filière"
+                  value={filiereId}
+                  onChange={setFiliereId}
+                  options={[
+                    { value: "", label: "Toutes les filières" },
+                    ...filieres.map((f) => ({ value: f.id, label: f.nom })),
+                  ]}
+                />
               )}
-              <Select label="Niveau" value={niveau} onChange={(e) => setNiveau(e.target.value)}>
-                {NIVEAUX.map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </Select>
+              <Select
+                label="Niveau"
+                value={niveau}
+                onChange={setNiveau}
+                options={optionsFromLabels(NIVEAUX)}
+              />
               <Input
                 label="Temps de lecture (min)"
                 type="number"

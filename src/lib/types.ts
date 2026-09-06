@@ -1,21 +1,36 @@
-/** Domain models — the shape of the data described in §15 of the cahier de charges. */
-import type {
-  EntrepriseStatus,
-  EntretienStatus,
-  Filiere,
-  FormationCategory,
-  JeuneStatus,
-  OffreStatus,
-  OpportunityType,
-  WorkMode,
-} from "./constants";
+import type { IconName } from "@/components/ui/icon";
+/**
+ * Types d'affichage du frontend.
+ *
+ * Depuis le branchement sur l'API, la plupart des écrans consomment directement
+ * les DTO (`src/lib/api/types.ts`), qui sont la copie exacte de ce que le
+ * backend sérialise. Ne subsistent ici que les formes réellement partagées par
+ * plusieurs composants d'UI, obtenues via `src/lib/api/adapters.ts` :
+ *
+ *  • `Jeune` (et ses sous-objets) — le profil circule dans une quinzaine de
+ *    composants qui typent leurs props avec des unions littérales strictes ;
+ *  • `Avis` et `Notification` — portent un libellé de date déjà formaté
+ *    (« Il y a 2 heures »), que l'API ne renvoie pas.
+ *
+ * Les anciens types `Offre`, `Formation`, `Entreprise`, `Entretien` et
+ * `QuizQuestion` ont été retirés : les composants correspondants utilisent
+ * désormais les DTO de l'API sans conversion.
+ */
+import type { JeuneStatus } from "./constants";
 
 export interface Experience {
   id: string;
   titre: string;
   structure: string;
   periode: string;
-  type: "Stage" | "Emploi" | "Projet académique" | "Projet personnel" | "Associatif" | "Bénévolat" | "Freelance";
+  type:
+    | "Stage"
+    | "Emploi"
+    | "Projet académique"
+    | "Projet personnel"
+    | "Associatif"
+    | "Bénévolat"
+    | "Freelance";
   description: string;
   competences: string[];
 }
@@ -36,15 +51,17 @@ export interface Jeune {
   email: string;
   telephone: string;
   ville: string;
-  /** Avatar as a data URL or remote URL. */
+  /** URL du document protégé ; résolue par `useProtectedImage`. */
   photo?: string;
-  /** Cover banner as a data URL or remote URL; falls back to the brand gradient. */
   banniere?: string;
   bio?: string;
   titre: string; // e.g. "Étudiant en Informatique"
   niveauEtudes: string;
   etablissement: string;
-  filiere: Filiere;
+  /** Libellé issu du référentiel des filières (§7.4) — affichage seulement. */
+  filiere: string;
+  /** Référence stable au référentiel ; `null` si non renseignée. */
+  filiereId: string | null;
   specialite?: string;
   anneeEtude?: string;
   diplome?: string;
@@ -54,139 +71,42 @@ export interface Jeune {
   liens: Lien[];
   scoreQuiz?: number;
   status: JeuneStatus;
-  /** Derived from filled fields — see `computeProfilCompletion`. */
+  /** Dérivé par le serveur — jamais recalculé côté client. */
   profilCompletion: number; // %
+  /** Ids des formations dont le cours a été lu jusqu'au bout. */
+  formationsLues?: string[];
+  /** Ids des formations dont le quiz de validation a été réussi. */
+  formationsValidees?: string[];
+  /** Meilleur score de quiz par formation (%), indexé par id de formation. */
+  scoresFormations?: Record<string, number>;
   formationsCompletees: number;
   candidatures: number;
 }
 
-export interface Entreprise {
-  id: string;
-  nom: string;
-  logo?: string;
-  secteur: string;
-  ville: string;
-  siteWeb?: string;
-  description: string;
-  responsable: string;
-  emailResponsable: string;
-  telephone: string;
-  status: EntrepriseStatus;
-  offresPubliees: number;
-}
-
-export interface Offre {
-  id: string;
-  titre: string;
-  entreprise: Pick<Entreprise, "id" | "nom" | "logo" | "ville">;
-  type: OpportunityType;
-  ville: string;
-  mode: WorkMode;
-  niveauDemande: string;
-  filiere: Filiere;
-  competences: string[];
-  description: string;
-  dateLimite: string;
-  nombrePostes: number;
-  status: OffreStatus;
-  candidatures: number;
-  publieeLe: string;
-}
-
-/** A quiz question attached to a formation — carries the explanation shown after answering. */
-export interface FormationQuizQuestion {
-  id: string;
-  enonce: string;
-  type: "qcm" | "vrai_faux";
-  options: string[];
-  bonneReponse: number;
-  /** Shown once the learner has answered, whatever the outcome. */
-  explication: string;
-  /** Title of the `<h2>` chapter this question comes from — used to point back to the course. */
-  chapitre?: string;
-}
-
-/** The validation quiz of a formation (§5.4). */
-export interface FormationQuiz {
-  titre: string;
-  description: string;
-  /** Minimum percentage required to validate the formation. */
-  scoreMinimum: number;
-  questions: FormationQuizQuestion[];
-}
-
-export interface Formation {
-  id: string;
-  titre: string;
-  /** Short subtitle shown under the title. */
-  sousTitre?: string;
-  description: string;
-  categorie: FormationCategory | "Spécialité";
-  filiere?: Filiere;
-  image?: string;
-  /** Estimated reading time in minutes. */
-  tempsLectureMin: number;
-  note?: number;
-  nombreAvis?: number;
-  niveau?: "Débutant" | "Intermédiaire" | "Avancé" | "Tous niveaux";
-  instructeur?: string;
-  populaire?: boolean;
-  /** Reading progress 0–100 (server-side default; the reader tracks it live). */
-  progression: number;
-  certifiante: boolean;
-  objectifs?: string[];
-  prerequis?: string[];
-  /**
-   * The course body as rich HTML, authored in the admin rich-text editor.
-   * `<h2>` headings become the reader's chapters / table of contents.
-   */
-  contenuHtml: string;
-  /** Validation quiz unlocked once the course has been read. */
-  quiz?: FormationQuiz;
-}
-
-export interface Entretien {
-  id: string;
-  jeune: Pick<Jeune, "id" | "prenom" | "nom" | "photo" | "titre">;
-  entreprise: Pick<Entreprise, "id" | "nom" | "logo">;
-  offreTitre: string;
-  date: string; // ISO
-  heure: string;
-  status: EntretienStatus;
-  lienReunion?: string;
-  commentaire?: string;
-}
-
-/** A learner review on a formation (§ e-learning). */
+/** Avis sur une formation, avec son libellé de date déjà formaté. */
 export interface Avis {
   id: string;
   formationId: string;
+  /** Prénom + initiale du nom : l'API n'expose jamais l'identité complète. */
   auteurNom: string;
   auteurPhoto?: string;
   /** 1–5. */
   note: number;
   commentaire: string;
-  /** Pre-formatted relative label ("Il y a 2 semaines") — avoids SSR/client time drift. */
+  /** Libellé relatif (« Il y a 2 semaines »), calculé depuis `createdAt`. */
   dateLabel: string;
   utile: number;
 }
 
 export interface Notification {
   id: string;
-  icon: string;
+  icon: IconName;
   title: string;
   detail?: string;
+  /** Libellé relatif calculé depuis `createdAt`. */
   time: string;
   read: boolean;
   href?: string;
-  /** Highlight with the gold accent (important events). */
+  /** Met en avant les événements importants. */
   accent?: boolean;
-}
-
-export interface QuizQuestion {
-  id: string;
-  enonce: string;
-  type: "qcm" | "vrai_faux";
-  options: string[];
-  bonneReponse: number;
 }

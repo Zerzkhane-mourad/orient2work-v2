@@ -14,7 +14,14 @@ interface TagInputProps {
 }
 
 /** Chip editor: type + Enter to add, click × to remove. Duplicates are ignored. */
-export function TagInput({ value, onChange, label, placeholder, hint, suggestions }: TagInputProps) {
+export function TagInput({
+  value,
+  onChange,
+  label,
+  placeholder,
+  hint,
+  suggestions,
+}: TagInputProps) {
   const [draft, setDraft] = useState("");
 
   const add = (raw: string) => {

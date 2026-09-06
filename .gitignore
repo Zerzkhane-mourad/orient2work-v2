@@ -21,6 +21,11 @@ yarn-error.log*
 
 # env files
 .env
+.mcp.json
+skills-lock.json
+.agents
+.claude
+scripts
 .env*.local
 
 # typescript

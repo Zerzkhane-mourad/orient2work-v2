@@ -1,29 +1,72 @@
 "use client";
 
-import { useMemo, useState } from "react";
+/**
+ * Moteur de recherche de talents (§6.5).
+ *
+ * Le filtrage se fait côté SERVEUR : l'annuaire complet n'est jamais envoyé au
+ * navigateur, et seuls les profils validés remontent, en vue publique (sans
+ * email, téléphone ni liens personnels). Une entreprise non validée par OMB
+ * reçoit un 403, affiché ici comme un message explicite.
+ */
+import { useState } from "react";
+import {
+  EmptyState,
+  ErrorState,
+  Icon,
+  optionsFromLabels,
+  Pagination,
+  Select,
+  SkeletonCard,
+} from "@/components/ui";
+import { api } from "@/lib/api";
+import { toJeuneFromPublic } from "@/lib/api/adapters";
+import { useApi } from "@/lib/api/use-api";
+import { usePageSize, usePagination } from "@/lib/use-pagination";
+import { useDebounced } from "@/lib/use-debounced";
+import { NIVEAUX_ETUDES } from "@/lib/constants";
+import { useFilieres } from "@/features/admin/use-referentiel";
 import { TalentCard } from "./talent-card";
-import { EmptyState, Icon, Select } from "@/components/ui";
-import { FILIERES, NIVEAUX_ETUDES } from "@/lib/constants";
-import type { Jeune } from "@/lib/types";
 
-/** Talent search engine with filters by filière, niveau and free-text query (§6.5). */
-export function TalentSearch({ talents }: { talents: Jeune[] }) {
+/**
+ * Tailles proposées : multiples de 2, 3 et 4, pour que la dernière rangée reste
+ * complète quel que soit le nombre de colonnes de la grille.
+ */
+const GRID_PER_PAGE = [12, 24, 48] as const;
+
+const PER_PAGE = 12;
+
+export function TalentSearch() {
+  const { filieres } = useFilieres();
   const [query, setQuery] = useState("");
-  const [filiere, setFiliere] = useState("");
+  const [filiereId, setFiliereId] = useState("");
   const [niveau, setNiveau] = useState("");
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return talents.filter((t) => {
-      const matchQuery =
-        !q ||
-        `${t.prenom} ${t.nom}`.toLowerCase().includes(q) ||
-        t.competences.some((c) => c.toLowerCase().includes(q));
-      const matchFiliere = !filiere || t.filiere === filiere;
-      const matchNiveau = !niveau || t.niveauEtudes === niveau;
-      return matchQuery && matchFiliere && matchNiveau;
-    });
-  }, [talents, query, filiere, niveau]);
+  // Anti-rebond : sans lui, chaque frappe déclencherait une requête.
+  const debouncedQuery = useDebounced(query.trim());
+
+  const { perPage, setPerPage } = usePageSize({
+    defaultSize: PER_PAGE,
+    storageKey: "recherche-talents",
+  });
+  const { page, goTo, listRef } = usePagination({
+    perPage,
+    resetOn: [debouncedQuery, filiereId, niveau],
+  });
+
+  const { data, loading, error, refetch } = useApi(
+    () =>
+      api.jeunes.searchTalents({
+        q: debouncedQuery || undefined,
+        filiereId: filiereId || undefined,
+        niveauEtudes: niveau || undefined,
+        page,
+        perPage,
+      }),
+    [debouncedQuery, filiereId, niveau, page, perPage],
+  );
+
+  const talents = (data?.items ?? []).map(toJeuneFromPublic);
+  const meta = data?.meta;
 
   return (
     <div className="space-y-6">
@@ -40,30 +83,61 @@ export function TalentSearch({ talents }: { talents: Jeune[] }) {
             className="w-full rounded-full border border-outline-variant bg-surface-container-lowest py-2.5 pl-12 pr-4 text-body-md focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary"
           />
         </div>
-        <Select value={filiere} onChange={(e) => setFiliere(e.target.value)} className="min-w-44">
-          <option value="">Toutes les filières</option>
-          {FILIERES.map((f) => (
-            <option key={f}>{f}</option>
-          ))}
-        </Select>
-        <Select value={niveau} onChange={(e) => setNiveau(e.target.value)} className="min-w-40">
-          <option value="">Tous les niveaux</option>
-          {NIVEAUX_ETUDES.map((n) => (
-            <option key={n}>{n}</option>
-          ))}
-        </Select>
+        {/* La valeur est l'identifiant, le libellé n'est qu'un affichage. */}
+        <Select
+          className="min-w-44"
+          aria-label="Filtrer par filière"
+          value={filiereId}
+          onChange={setFiliereId}
+          options={[
+            { value: "", label: "Toutes les filières" },
+            ...filieres.map((f) => ({ value: f.id, label: f.nom })),
+          ]}
+        />
+        <Select
+          className="min-w-40"
+          aria-label="Filtrer par niveau d'études"
+          value={niveau}
+          onChange={setNiveau}
+          options={[{ value: "", label: "Tous les niveaux" }, ...optionsFromLabels(NIVEAUX_ETUDES)]}
+        />
       </div>
 
-      <p className="text-sm text-on-surface-variant">{results.length} talent(s) validé(s)</p>
-
-      {results.length > 0 ? (
+      {error ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : loading ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {results.map((t) => (
-            <TalentCard key={t.id} talent={t} />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
           ))}
         </div>
       ) : (
-        <EmptyState icon="person_search" title="Aucun talent trouvé" description="Ajustez vos filtres de recherche." />
+        <div ref={listRef} className="space-y-6">
+          {talents.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {talents.map((t) => (
+                <TalentCard key={t.id} talent={t} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon="person_search"
+              title="Aucun talent trouvé"
+              description="Ajustez vos filtres de recherche."
+            />
+          )}
+
+          {meta && (
+            <Pagination
+              meta={meta}
+              onPageChange={goTo}
+              onPerPageChange={setPerPage}
+              perPageOptions={GRID_PER_PAGE}
+              busy={loading}
+              unit="talent"
+            />
+          )}
+        </div>
       )}
     </div>
   );

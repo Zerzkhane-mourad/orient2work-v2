@@ -27,9 +27,7 @@ export function RatingSummary({ avis, filter, onFilter }: RatingSummaryProps) {
       <div className="text-center">
         <p className="font-headline text-5xl font-bold text-[#8a6d0b]">{average.toFixed(1)}</p>
         <StarRating value={average} showValue={false} className="mt-1 justify-center" />
-        <p className="mt-1 text-sm text-on-surface-variant">
-          {total} avis
-        </p>
+        <p className="mt-1 text-sm text-on-surface-variant">{total} avis</p>
       </div>
 
       {/* Distribution */}

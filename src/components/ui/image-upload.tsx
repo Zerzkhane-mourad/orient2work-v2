@@ -7,7 +7,16 @@ import { cn } from "@/lib/utils";
 
 interface ImageUploadProps {
   value?: string;
+  /** Aperçu redimensionné, pour l'affichage immédiat. */
   onChange: (dataUrl: string | undefined) => void;
+  /**
+   * Fichier d'origine, à transmettre tel quel à l'API.
+   *
+   * L'aperçu est une data URL (pratique pour l'affichage), mais le backend
+   * attend un vrai fichier en `multipart/form-data` : il en vérifie le type
+   * MIME, l'extension et la signature binaire.
+   */
+  onFile?: (file: File | undefined) => void;
   /** "circle" for avatars, "wide" for cover banners. */
   shape?: "circle" | "wide";
   maxWidth: number;
@@ -21,6 +30,7 @@ interface ImageUploadProps {
 export function ImageUpload({
   value,
   onChange,
+  onFile,
   shape = "wide",
   maxWidth,
   maxHeight,
@@ -38,6 +48,7 @@ export function ImageUpload({
     setBusy(true);
     try {
       onChange(await fileToResizedDataUrl(file, { maxWidth, maxHeight }));
+      onFile?.(file);
     } catch (e) {
       setError(e instanceof ImageError ? e.message : "Le chargement de l'image a échoué.");
     } finally {
@@ -68,7 +79,9 @@ export function ImageUpload({
         }}
         className={cn(
           "relative flex cursor-pointer items-center justify-center overflow-hidden border-2 border-dashed transition-colors",
-          dragging ? "border-secondary bg-secondary-container/20" : "border-outline-variant hover:border-secondary",
+          dragging
+            ? "border-secondary bg-secondary-container/20"
+            : "border-outline-variant hover:border-secondary",
           shape === "circle" ? "mx-auto h-36 w-36 rounded-full" : "h-40 w-full rounded-lg",
         )}
       >
@@ -117,6 +130,7 @@ export function ImageUpload({
               type="button"
               onClick={() => {
                 onChange(undefined);
+                onFile?.(undefined);
                 setError(null);
               }}
               className="text-xs font-semibold text-error hover:underline"

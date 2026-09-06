@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Chip, Icon, Input, Modal, Select, TagInput, Textarea } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Chip,
+  Icon,
+  Input,
+  Modal,
+  optionsFromLabels,
+  Select,
+  TagInput,
+  Textarea,
+} from "@/components/ui";
 import type { Experience } from "@/lib/types";
 import { EditableCard } from "./editable-card";
+import { PeriodeField } from "./periode-field";
+import {
+  formatPeriode,
+  parsePeriode,
+  PERIODE_VIDE,
+  problemePeriode,
+  type Periode,
+} from "./periode";
 import { useProfile } from "./profile-store";
 
 const TYPES: Experience["type"][] = [
@@ -32,9 +51,22 @@ export function ExperienceSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<Experience, "id">>(EMPTY);
 
+  /*
+   * La période vit à part du brouillon, en mois plutôt qu'en texte : c'est la
+   * forme que manipulent les champs. Elle n'est reconvertie en chaîne — le
+   * format attendu par l'API — qu'à l'enregistrement.
+   */
+  const [periode, setPeriode] = useState<Periode>(PERIODE_VIDE);
+  /** Texte d'origine quand il ne se relit pas (expérience saisie avant ce champ). */
+  const [periodeHeritee, setPeriodeHeritee] = useState<string>("");
+  const [periodeTouchee, setPeriodeTouchee] = useState(false);
+
   const openAdd = () => {
     setEditingId(null);
     setDraft(EMPTY);
+    setPeriode(PERIODE_VIDE);
+    setPeriodeHeritee("");
+    setPeriodeTouchee(false);
     setOpen(true);
   };
 
@@ -43,13 +75,29 @@ export function ExperienceSection() {
     const { id: _id, ...rest } = exp;
     void _id;
     setDraft(rest);
+
+    const relue = parsePeriode(exp.periode);
+    setPeriode(relue ?? PERIODE_VIDE);
+    // Non relisible : on garde le texte sous les yeux plutôt que de l'effacer
+    // en silence, le candidat le retape en deux clics.
+    setPeriodeHeritee(relue ? "" : exp.periode);
+    setPeriodeTouchee(false);
     setOpen(true);
   };
 
+  // Message d'erreur retenu jusqu'à la première tentative d'envoi : signaler
+  // « indiquez le mois de début » sur un formulaire vierge est du bruit.
+  const problemeDePeriode = problemePeriode(periode);
+  const erreurPeriode = periodeTouchee ? problemeDePeriode : null;
+
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) updateExperience(editingId, draft);
-    else addExperience(draft);
+    setPeriodeTouchee(true);
+    if (problemeDePeriode) return;
+
+    const complet = { ...draft, periode: formatPeriode(periode) };
+    if (editingId) updateExperience(editingId, complet);
+    else addExperience(complet);
     setOpen(false);
   };
 
@@ -67,8 +115,8 @@ export function ExperienceSection() {
       >
         {jeune.experiences.length === 0 ? (
           <p className="text-sm text-on-surface-variant">
-            Ajoutez vos stages, projets académiques ou expériences associatives — ils comptent autant
-            qu&apos;un emploi.
+            Ajoutez vos stages, projets académiques ou expériences associatives — ils comptent
+            autant qu&apos;un emploi.
           </p>
         ) : (
           <div className="space-y-5">
@@ -158,20 +206,17 @@ export function ExperienceSection() {
           />
           <Select
             label="Type"
+            required
             value={draft.type}
-            onChange={(e) => setDraft({ ...draft, type: e.target.value as Experience["type"] })}
-          >
-            {TYPES.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </Select>
+            onChange={(type) => setDraft({ ...draft, type: type as Experience["type"] })}
+            options={optionsFromLabels(TYPES)}
+          />
           <div className="sm:col-span-2">
-            <Input
-              label="Période"
-              required
-              placeholder="Juin 2023 – Août 2023"
-              value={draft.periode}
-              onChange={(e) => setDraft({ ...draft, periode: e.target.value })}
+            <PeriodeField
+              value={periode}
+              onChange={setPeriode}
+              error={erreurPeriode}
+              ancienneValeur={periodeHeritee}
             />
           </div>
           <div className="sm:col-span-2">

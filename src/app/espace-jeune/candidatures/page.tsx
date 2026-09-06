@@ -1,204 +1,275 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { Badge, ButtonLink, Card, CardBody, EmptyState, Icon } from "@/components/ui";
-import { offres } from "@/lib/mock-data";
-import { formatDate, cn } from "@/lib/utils";
+/**
+ * Mes candidatures (espace jeune).
+ *
+ * L'écran répondait à « où en sont mes dossiers ». Il répond maintenant d'abord
+ * à « qu'est-ce qui m'attend » : une invitation à un entretien reçoit une
+ * bannière et un bouton, au lieu de se fondre dans la liste sous forme d'un
+ * simple libellé de statut.
+ *
+ * La liste est paginée par l'API : les regroupements d'onglets sont donc des
+ * FILTRES SERVEUR, jamais un `filter()` sur la page courante, et les compteurs
+ * viennent d'un `groupBy` dédié.
+ */
+import { useState } from "react";
+import {
+  ButtonLink,
+  Card,
+  CardBody,
+  EmptyState,
+  ErrorState,
+  Icon,
+  PageHeader,
+  Pagination,
+  ScrollRow,
+  SkeletonList,
+} from "@/components/ui";
+import { LigneCandidature } from "@/features/candidatures/ligne-candidature";
+import { api } from "@/lib/api";
+import type { CandidatureStatus } from "@/lib/api/types";
+import { useApi } from "@/lib/api/use-api";
+import { usePageSize, usePagination } from "@/lib/use-pagination";
+import { cn } from "@/lib/utils";
 
-type CandidatureState = "envoyee" | "vue" | "entretien" | "refusee";
+const PER_PAGE = 10;
 
-const STEPS = ["envoyee", "vue", "entretien"] as const;
-const STEP_LABELS: Record<(typeof STEPS)[number], string> = {
-  envoyee: "Envoyée",
-  vue: "Vue",
-  entretien: "Entretien",
-};
+const EN_COURS = ["envoyee", "vue", "preselectionnee"] as const;
+const ENTRETIENS = ["entretien", "acceptee"] as const;
 
-const stateConfig: Record<
-  CandidatureState,
-  { label: string; tone: React.ComponentProps<typeof Badge>["tone"]; icon: string }
-> = {
-  envoyee: { label: "En attente", tone: "info", icon: "schedule" },
-  vue: { label: "Vue par l'entreprise", tone: "primary", icon: "visibility" },
-  entretien: { label: "Entretien proposé", tone: "success", icon: "event_available" },
-  refusee: { label: "Non retenue", tone: "error", icon: "do_not_disturb_on" },
-};
-
-// Applications sent by the young talent (§5.8).
-const candidatures = [
-  { offre: offres[0], date: "2026-07-08", state: "entretien" as CandidatureState },
-  { offre: offres[1], date: "2026-07-10", state: "vue" as CandidatureState },
-  { offre: offres[2], date: "2026-07-12", state: "envoyee" as CandidatureState },
-];
-
-const tabs = [
-  { key: "toutes", label: "Toutes" },
-  { key: "encours", label: "En cours" },
-  { key: "entretien", label: "Entretiens" },
-  { key: "refusee", label: "Non retenues" },
+const TOUS_STATUTS = [
+  "envoyee",
+  "vue",
+  "preselectionnee",
+  "entretien",
+  "acceptee",
+  "refusee",
+  "retiree",
 ] as const;
 
-function StatusStepper({ state }: { state: CandidatureState }) {
-  if (state === "refusee") {
-    return (
-      <div className="flex items-center gap-1 text-xs font-semibold text-error">
-        <Icon name="do_not_disturb_on" className="text-[16px]" /> Candidature clôturée
-      </div>
-    );
-  }
-  const reached = STEPS.indexOf(state as (typeof STEPS)[number]);
-  return (
-    <div className="flex items-center">
-      {STEPS.map((step, i) => (
-        <div key={step} className="flex items-center">
-          <div className="flex flex-col items-center gap-1">
-            <span
-              className={cn(
-                "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold",
-                i <= reached
-                  ? "bg-secondary-container text-on-secondary-container"
-                  : "bg-surface-variant text-on-surface-variant",
-              )}
-            >
-              {i < reached ? <Icon name="check" className="text-[12px]" /> : i + 1}
-            </span>
-            <span
-              className={cn(
-                "text-[10px] font-medium",
-                i <= reached ? "text-primary" : "text-on-surface-variant",
-              )}
-            >
-              {STEP_LABELS[step]}
-            </span>
-          </div>
-          {i < STEPS.length - 1 && (
-            <span
-              className={cn(
-                "mx-1 mb-4 h-0.5 w-8 rounded-full",
-                i < reached ? "bg-secondary-container" : "bg-surface-variant",
-              )}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
+/**
+ * Onglets et leur traduction en filtre serveur.
+ *
+ * `statuts: undefined` = aucun filtre, donc tout.
+ */
+const tabs = [
+  { key: "toutes", label: "Toutes", statuts: undefined },
+  { key: "encours", label: "En cours", statuts: EN_COURS },
+  { key: "entretien", label: "Entretiens", statuts: ENTRETIENS },
+  { key: "refusee", label: "Non retenues", statuts: ["refusee", "retiree"] },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  statuts?: readonly CandidatureStatus[];
+}[];
 
 export default function MesCandidaturesPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]["key"]>("toutes");
 
-  const filtered = useMemo(() => {
-    switch (tab) {
-      case "encours":
-        return candidatures.filter((c) => c.state === "envoyee" || c.state === "vue");
-      case "entretien":
-        return candidatures.filter((c) => c.state === "entretien");
-      case "refusee":
-        return candidatures.filter((c) => c.state === "refusee");
-      default:
-        return candidatures;
-    }
-  }, [tab]);
+  const statuts = tabs.find((t) => t.key === tab)?.statuts;
 
-  const stats = [
-    { label: "Envoyées", value: candidatures.length },
-    { label: "En cours", value: candidatures.filter((c) => c.state !== "refusee").length },
-    { label: "Entretiens", value: candidatures.filter((c) => c.state === "entretien").length },
-  ];
+  // Changer d'onglet remet en page 1 : rester page 3 sur un onglet qui n'en a
+  // qu'une afficherait un écran vide.
+  const { perPage, setPerPage } = usePageSize({
+    defaultSize: PER_PAGE,
+    storageKey: "jeune-candidatures",
+  });
+  const { page, goTo, listRef } = usePagination({ perPage, resetOn: [tab] });
+
+  const { data, loading, error, refetch } = useApi(
+    () => api.candidatures.mine({ status: statuts, page, perPage }),
+    // `statuts` plutôt que `tab` : constante de module propre à chaque onglet,
+    // donc stable d'un rendu à l'autre, et c'est elle que la requête envoie.
+    [statuts, page, perPage],
+  );
+
+  // Les compteurs portent sur la TOTALITÉ, la liste sur une page : ils viennent
+  // donc d'un `groupBy` côté serveur, et non d'un décompte de ce qui est affiché.
+  const compteurs = useApi(() => api.candidatures.countMine(), []);
+
+  const parStatut = compteurs.data ?? {};
+  const somme = (...cles: readonly CandidatureStatus[]) =>
+    cles.reduce((total, cle) => total + (parStatut[cle] ?? 0), 0);
+
+  const compteOnglet = (statuts?: readonly CandidatureStatus[]) =>
+    somme(...(statuts ?? TOUS_STATUTS));
+
+  const visibles = data?.items ?? [];
+  const enCours = somme(...EN_COURS);
+  const invitations = somme("entretien");
+  const acceptees = somme("acceptee");
+  // Une candidature retirée n'a jamais été soumise au jugement : la compter
+  // ferait baisser le taux de réponse sans qu'aucune entreprise soit en cause.
+  const envoyees = somme(...TOUS_STATUTS.filter((s) => s !== "retiree"));
+  const traitees = somme("vue", "preselectionnee", "entretien", "acceptee", "refusee");
+  const tauxReponse = envoyees > 0 ? Math.round((traitees / envoyees) * 100) : 0;
+
+  const rechargerTout = () => {
+    refetch();
+    compteurs.refetch();
+  };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      {/* Header + stats */}
+    <div className="mx-auto max-w-4xl space-y-4">
+      <PageHeader
+        size="sm"
+        title="Mes candidatures"
+        subtitle="Suivez l'avancement de chaque candidature."
+      />
+
+      {/*
+        Bannière d'appel : une invitation à un entretien n'attend pas d'être
+        retrouvée au fil d'une liste paginée — elle peut se trouver page 3, et
+        un créneau non confirmé peut être repris par un autre candidat.
+      */}
+      {!compteurs.loading && invitations > 0 && (
+        <Card className="border-l-4 border-l-secondary">
+          <CardBody className="flex flex-wrap items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <Icon name="event_available" className="text-secondary" />
+              {invitations === 1
+                ? "Une entreprise vous propose un entretien."
+                : `${invitations} entreprises vous proposent un entretien.`}
+            </p>
+            <ButtonLink href="/espace-jeune/entretiens" variant="secondary" size="sm">
+              Répondre
+            </ButtonLink>
+          </CardBody>
+        </Card>
+      )}
+
       <Card>
-        <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="font-headline text-xl font-bold text-primary">Mes candidatures</h1>
-            <p className="text-sm text-on-surface-variant">Suivez l&apos;avancement de chaque candidature.</p>
-          </div>
-          <div className="flex gap-6">
-            {stats.map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="font-headline text-2xl font-bold text-primary">{s.value}</p>
-                <p className="text-xs text-on-surface-variant">{s.label}</p>
-              </div>
-            ))}
-          </div>
+        <CardBody className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Chiffre label="Envoyées" valeur={envoyees} loading={compteurs.loading} />
+          <Chiffre label="En cours" valeur={enCours} loading={compteurs.loading} />
+          <Chiffre label="Acceptées" valeur={acceptees} loading={compteurs.loading} accent />
+          <Chiffre
+            label="Taux de réponse"
+            valeur={tauxReponse}
+            suffixe="%"
+            loading={compteurs.loading}
+            aide={
+              envoyees > 0
+                ? `${traitees} de vos ${envoyees} candidatures ont été traitées.`
+                : undefined
+            }
+          />
         </CardBody>
       </Card>
 
-      {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={cn(
-              "whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
-              tab === t.key
-                ? "bg-primary text-on-primary"
-                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Compteurs dans les onglets : on sait ce qu'on va trouver avant de
+          cliquer, et un onglet vide ne se découvre plus après coup. */}
+      <ScrollRow aria-label="Filtrer par statut" activeKey={tab}>
+        {tabs.map((t) => {
+          const compte = compteOnglet(t.statuts);
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              aria-current={tab === t.key ? "true" : undefined}
+              data-active={tab === t.key ? "true" : undefined}
+              className={cn(
+                "inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors",
+                tab === t.key
+                  ? "bg-primary text-on-primary"
+                  : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+              )}
+            >
+              {t.label}
+              {!compteurs.loading && (
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-xs tabular-nums",
+                    tab === t.key ? "bg-white/20" : "bg-surface-container-highest",
+                  )}
+                >
+                  {compte}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </ScrollRow>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <SkeletonList count={3} />
+      ) : error ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : visibles.length === 0 ? (
         <EmptyState
           icon="send"
-          title="Aucune candidature dans cette catégorie"
-          description="Parcourez les offres et postulez à celles qui vous correspondent."
+          title={
+            tab === "toutes"
+              ? "Vous n'avez pas encore postulé"
+              : "Aucune candidature dans cette catégorie"
+          }
+          description={
+            tab === "toutes"
+              ? "Parcourez les offres et postulez à celles qui vous correspondent."
+              : "Changez d'onglet pour retrouver vos autres candidatures."
+          }
           action={
-            <ButtonLink href="/espace-jeune/offres" variant="secondary">
-              Voir les offres
-            </ButtonLink>
+            tab === "toutes" ? (
+              <ButtonLink href="/espace-jeune/offres" variant="secondary">
+                Voir les offres
+              </ButtonLink>
+            ) : undefined
           }
         />
       ) : (
-        <div className="space-y-3">
-          {filtered.map(({ offre, date, state }) => {
-            const cfg = stateConfig[state];
-            return (
-              <Card key={offre.id}>
-                <CardBody className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-container-highest text-primary">
-                      <Icon name="business" className="text-2xl" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/espace-jeune/offres/${offre.id}`}
-                        className="font-bold text-primary hover:underline"
-                      >
-                        {offre.titre}
-                      </Link>
-                      <p className="truncate text-sm text-on-surface-variant">
-                        {offre.entreprise.nom} · {offre.ville}
-                      </p>
-                      <p className="mt-0.5 text-xs text-on-surface-variant">
-                        Envoyée le {formatDate(date)}
-                      </p>
-                    </div>
-                    <Badge tone={cfg.tone} icon={cfg.icon}>
-                      {cfg.label}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-outline-variant pt-4">
-                    <StatusStepper state={state} />
-                    <ButtonLink href={`/espace-jeune/offres/${offre.id}`} variant="ghost" size="sm">
-                      Voir l&apos;offre →
-                    </ButtonLink>
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
+        <div ref={listRef} className="space-y-3">
+          {visibles.map((candidature) => (
+            <LigneCandidature
+              key={candidature.id}
+              candidature={candidature}
+              // Un retrait change à la fois la ligne et les compteurs d'onglets.
+              onChanged={rechargerTout}
+            />
+          ))}
+
+          {data?.meta && (
+            <Pagination
+              meta={data.meta}
+              onPageChange={goTo}
+              onPerPageChange={setPerPage}
+              busy={loading}
+              unit="candidature"
+            />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function Chiffre({
+  label,
+  valeur,
+  suffixe,
+  loading,
+  accent,
+  aide,
+}: {
+  label: string;
+  valeur: number;
+  suffixe?: string;
+  loading: boolean;
+  accent?: boolean;
+  /** Infobulle : d'où sort le chiffre, quand il est calculé. */
+  aide?: string;
+}) {
+  return (
+    <div className="rounded-lg bg-surface-container-low px-3 py-2.5" title={aide}>
+      <p
+        className={cn(
+          "font-headline text-2xl font-bold leading-tight",
+          accent ? "text-secondary" : "text-primary",
+        )}
+      >
+        {loading ? "—" : `${valeur}${suffixe ?? ""}`}
+      </p>
+      <p className="text-xs text-on-surface-variant">{label}</p>
     </div>
   );
 }

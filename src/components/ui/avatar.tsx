@@ -1,4 +1,6 @@
-import Image from "next/image";
+"use client";
+
+import { useProtectedImage } from "@/lib/api/media";
 import { cn } from "@/lib/utils";
 
 interface AvatarProps {
@@ -11,6 +13,10 @@ interface AvatarProps {
 
 /** Round avatar with an initials fallback when no image is provided. */
 export function Avatar({ src, alt, size = 40, className }: AvatarProps) {
+  // Les photos servies par l'API sont protégées par un jeton : `useProtectedImage`
+  // les télécharge et renvoie une URL `blob:` affichable.
+  const resolved = useProtectedImage(src);
+
   const initials = alt
     .split(" ")
     .map((w) => w[0])
@@ -27,8 +33,17 @@ export function Avatar({ src, alt, size = 40, className }: AvatarProps) {
       )}
       style={{ width: size, height: size }}
     >
-      {src ? (
-        <Image src={src} alt={alt} width={size} height={size} className="h-full w-full object-cover" />
+      {resolved ? (
+        // `next/image` n'apporte rien sur une URL blob: locale, et refuserait
+        // un hôte non déclaré dans next.config.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={resolved}
+          alt={alt}
+          width={size}
+          height={size}
+          className="h-full w-full object-cover"
+        />
       ) : (
         <span style={{ fontSize: size * 0.4 }}>{initials}</span>
       )}

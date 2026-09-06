@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
+import { Z_LAYERS } from "@/lib/z-layers";
 
 interface ModalProps {
   open: boolean;
@@ -20,14 +21,37 @@ interface ModalProps {
  * Accessible dialog: portalled, Escape to dismiss, backdrop click to dismiss,
  * body scroll locked while open, and focus moved into the panel.
  */
-export function Modal({ open, onClose, title, description, children, footer, size = "md" }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  size = "md",
+}: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * `onClose` gardé dans une ref, et l'effet d'ouverture ne dépend QUE de `open`.
+   *
+   * Les appelants passent normalement une fonction définie dans leur corps de
+   * composant, donc recréée à chaque rendu. Si l'effet en dépendait, il se
+   * rejouerait à chaque frappe dans un champ de la modale — et son
+   * `panelRef.focus()` volerait le focus après chaque lettre, rendant toute
+   * saisie impossible. Un composant ne doit pas se dérégler parce qu'on lui
+   * passe un gestionnaire en ligne : c'est l'usage normal de React.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // Close on Escape and lock background scroll while open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -37,12 +61,18 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
+    // Empilement en `style` et non en classe : la valeur est partagée avec le
+    // menu du `Select`, qui doit passer au-dessus et ne peut la lire que sous
+    // forme de nombre. Une seule source, donc aucune dérive possible.
+    <div
+      style={{ zIndex: Z_LAYERS.modal }}
+      className="fixed inset-0 flex items-end justify-center sm:items-center"
+    >
       <div className="absolute inset-0 bg-primary/50 backdrop-blur-sm" onClick={onClose} />
 
       <div
@@ -71,7 +101,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5">{children}</div>
 
         {footer && (
           <footer className="flex justify-end gap-3 border-t border-outline-variant bg-surface-container-low px-6 py-4">

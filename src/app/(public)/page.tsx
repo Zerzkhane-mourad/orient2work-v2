@@ -1,221 +1,166 @@
-import { ButtonLink, Card, Icon } from "@/components/ui";
-import { FormationCard } from "@/features/formations/formation-card";
-import { OffreCard } from "@/features/offres/offre-card";
-import { formations, offres } from "@/lib/mock-data";
-import { APP_TAGLINE, QUIZ_PASS_SCORE } from "@/lib/constants";
+import { ButtonLink } from "@/components/ui";
+import { Reveal } from "@/components/motion/reveal";
+import { BandeConfiance } from "@/features/home/bande-confiance";
+import { CategoriesSection } from "@/features/home/categories-section";
+import { DoubleParcours } from "@/features/home/double-parcours";
+import { FaqSection } from "@/features/home/faq-section";
+import { HeroDeuxPortes } from "@/features/home/hero-deux-portes";
+import { TrioChiffres } from "@/features/home/trio-chiffres";
+import { TemoignagesSection } from "@/features/home/temoignages-section";
+import { serverFetch } from "@/lib/api/client";
+import type { ApiFaq, ApiTemoignage } from "@/lib/api/types";
 
-const steps = {
-  jeunes: [
-    { title: "Créer son profil", desc: "Complétez votre parcours et vos aspirations." },
-    { title: "Passer le test", desc: "Validez vos compétences avec nos tests OMB." },
-    { title: "Se former", desc: "Accédez à des formations certifiantes exclusives." },
-    { title: "Postuler", desc: "Décrochez votre futur emploi ou stage." },
-  ],
-  entreprises: [
-    { title: "Créer un compte", desc: "Présentez votre entreprise et vos valeurs." },
-    { title: "Validation OMB", desc: "Accès sécurisé après vérification de nos équipes." },
-    { title: "Publier une offre", desc: "Ciblez les profils correspondant à vos besoins." },
-    { title: "Consulter les profils", desc: "Accédez à des talents pré-qualifiés et testés." },
-  ],
-};
 
-const advantages = [
-  {
-    icon: "verified",
-    title: "Profils vérifiés",
-    desc: `Exigence de ${QUIZ_PASS_SCORE}%+ au test de validation pour une qualité optimale.`,
-  },
-  {
-    icon: "lightbulb",
-    title: "Formations incluses",
-    desc: "Soft skills et outils digitaux pour booster l'employabilité.",
-  },
-  {
-    icon: "handshake",
-    title: "Mise en relation directe",
-    desc: "Simplifiez le recrutement grâce à un matching intelligent.",
-  },
-];
+/**
+ * Lectures publiques côté serveur : aucune session n'est nécessaire, et le cache
+ * de 60 s de `serverFetch` évite de solliciter l'API à chaque visite.
+ *
+ * Chaque `catch` garde la page debout si l'API est indisponible : la section
+ * concernée disparaît, le reste s'affiche.
+ */
+async function loadTemoignages(): Promise<ApiTemoignage[]> {
+  // Vrais avis de la base : la vitrine ne fabrique pas de témoignages.
+  return serverFetch<ApiTemoignage[]>("/formations/temoignages").catch(() => []);
+}
 
-const stats = [
-  { value: "5000+", label: "Jeunes inscrits" },
-  { value: "250+", label: "Entreprises partenaires" },
-  { value: "50+", label: "Formations" },
-  { value: "1200+", label: "Entretiens" },
-];
+/** Questions saisies au back-office, dans l'ordre voulu par l'administrateur. */
+async function loadFaq(): Promise<ApiFaq[]> {
+  return serverFetch<ApiFaq[]>("/faq").catch(() => []);
+}
 
-export default function HomePage() {
+/**
+ * En-tête de section.
+ *
+ * SANS surtitre : le petit label en capitales posé au-dessus de chaque titre
+ * produit le rythme répétitif qui trahit une page composée à la chaîne, et la
+ * position de la section suffit à la situer. Le titre porte seul.
+ */
+function EnTeteSection({ titre, soustitre }: { titre: string; soustitre?: string }) {
+  return (
+    /* `text-balance` : le navigateur répartit lui-même les mots entre les
+       lignes, au lieu de laisser un titre de deux lignes se terminer sur un mot
+       isolé. Gratuit, et c'est ce qui distingue un titre composé d'un titre
+       simplement coupé. */
+    <Reveal className="mb-8 max-w-2xl space-y-2">
+      <h2 className="text-balance font-headline text-3xl font-bold tracking-tight text-primary">
+        {titre}
+      </h2>
+      {soustitre && <p className="text-pretty text-on-surface-variant">{soustitre}</p>}
+    </Reveal>
+  );
+}
+
+/**
+ * Page d'accueil publique.
+ *
+ * Reste un SERVER COMPONENT : les données sont lues côté serveur et la page est
+ * prérendue avec son contenu réel, ce qui compte pour l'indexation. Seules les
+ * enveloppes d'animation (`Reveal`, `CompteurAnime`) sont clientes ; elles ne
+ * portent aucune donnée, uniquement le mouvement.
+ *
+ * Conséquence à ne pas perdre de vue : le HTML rendu par le serveur est COMPLET
+ * et VISIBLE. L'état initial des animations est posé par GSAP au moment de
+ * s'exécuter, jamais par une classe `opacity-0` - sans quoi la page
+ * apparaîtrait vide à qui n'exécute pas le script.
+ *
+ * Rythme des fonds, voulu : sombre (héros), clair (chiffres), sombre
+ * (confiance), puis alternance claire jusqu'à la bande d'appel finale. Deux
+ * blocs sombres consécutifs écraseraient le chiffre monumental de la section
+ * confiance, qui est le point culminant de la page.
+ */
+export default async function HomePage() {
+  // Les deux lectures sont indépendantes : les enchaîner ferait attendre la
+  // page pour rien.
+  const [temoignages, questions] = await Promise.all([loadTemoignages(), loadFaq()]);
+
   return (
     <>
-      {/* Hero */}
-      <section className="mx-auto grid max-w-container-max items-center gap-14 px-margin-mobile py-16 lg:grid-cols-2 lg:px-margin-desktop lg:py-28">
-        <div className="flex flex-col gap-8">
-          <div className="space-y-5">
-            <span className="inline-flex items-center gap-2 rounded-full bg-secondary-container px-3 py-1 text-xs font-bold text-on-secondary-container">
-              <Icon name="star" className="text-[16px]" filled /> Orient2Work by OMB
-            </span>
-            <h1 className="font-headline text-4xl font-bold leading-tight text-primary lg:text-6xl">
-              {APP_TAGLINE}
-            </h1>
-            <p className="max-w-lg text-lg text-on-surface-variant">
-              Le réseau qui connecte les jeunes talents avec les entreprises les plus ambitieuses.
-              Construisez votre avenir dès aujourd&apos;hui.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <ButtonLink href="/inscription?role=jeune" variant="secondary" size="lg">
-              Je suis un jeune talent
-            </ButtonLink>
-            <ButtonLink href="/inscription?role=entreprise" variant="outline" size="lg">
-              Je suis une entreprise
-            </ButtonLink>
-          </div>
-        </div>
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary to-primary-container p-10 shadow-level-2">
-          <div className="flex h-[420px] flex-col justify-between text-white">
-            <Icon name="rocket_launch" className="text-6xl text-secondary-fixed-dim" />
-            <div className="space-y-4">
-              <p className="font-headline text-2xl font-bold">
-                De l&apos;orientation à la préparation, jusqu&apos;à l&apos;opportunité.
-              </p>
-              <div className="flex gap-6">
-                {stats.slice(0, 2).map((s) => (
-                  <div key={s.label}>
-                    <p className="font-headline text-3xl font-bold text-secondary-fixed-dim">{s.value}</p>
-                    <p className="text-sm text-white/70">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Le premier avis alimente la micro-carte flottante du héros : du
+          contenu réel plutôt qu'un faux message décoratif. */}
+      <HeroDeuxPortes {...(temoignages[0] ? { temoignage: temoignages[0] } : {})} />
+
+      {/* Chiffres : deux cartes claires et une sombre, comme dans la référence */}
+      <section className="mx-auto max-w-container-max px-margin-mobile py-14 lg:px-margin-desktop lg:py-16">
+        <Reveal cascade>
+          <TrioChiffres />
+        </Reveal>
       </section>
 
-      {/* Comment ça marche */}
-      <section className="bg-surface-container py-24">
+      <BandeConfiance />
+
+      {/* Catégories : première porte vers le catalogue */}
+      <section className="mx-auto max-w-container-max px-margin-mobile py-16 lg:px-margin-desktop lg:py-20">
+        <EnTeteSection
+          titre="Quel type d'opportunité cherchez-vous ?"
+          soustitre="Six entrées vers le catalogue, sans passer par la recherche."
+        />
+        <Reveal cascade>
+          <CategoriesSection />
+        </Reveal>
+      </section>
+
+      {/* Double parcours */}
+      <section className="border-y border-outline-variant bg-surface-container-low py-16 lg:py-20">
         <div className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop">
-          <div className="mb-16 text-center">
-            <h2 className="font-headline text-3xl font-bold text-primary">Comment ça marche ?</h2>
-            <div className="mx-auto mt-4 h-1 w-20 rounded-full bg-secondary-container" />
-          </div>
-          <div className="grid gap-10 md:grid-cols-2">
-            {(["jeunes", "entreprises"] as const).map((audience) => (
-              <Card key={audience} className="p-8">
-                <div className="mb-8 flex items-center gap-3">
-                  <Icon
-                    name={audience === "jeunes" ? "school" : "business"}
-                    className="text-3xl text-secondary"
-                  />
-                  <h3 className="font-headline text-2xl font-bold text-primary">
-                    Pour les {audience === "jeunes" ? "Jeunes" : "Entreprises"}
-                  </h3>
-                </div>
-                <ol className="space-y-7">
-                  {steps[audience].map((step, i) => (
-                    <li key={step.title} className="flex gap-4">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary-container font-bold text-on-secondary-container">
-                        {i + 1}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-primary">{step.title}</h4>
-                        <p className="text-sm text-on-surface-variant">{step.desc}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </Card>
-            ))}
-          </div>
+          <EnTeteSection
+            titre="Deux parcours, deux rythmes"
+            soustitre="Ce que vous avez à faire dépend du côté d'où vous arrivez."
+          />
+          <DoubleParcours />
         </div>
       </section>
 
-      {/* Statistiques */}
-      <section className="bg-primary py-16 text-white">
-        <div className="mx-auto grid max-w-container-max grid-cols-2 gap-8 px-margin-mobile text-center md:grid-cols-4 lg:px-margin-desktop">
-          {stats.map((s) => (
-            <div key={s.label}>
-              <p className="font-headline text-4xl font-bold text-secondary-fixed-dim">{s.value}</p>
-              <p className="mt-1 text-sm font-semibold uppercase tracking-wider text-white/70">
-                {s.label}
-              </p>
+      {/* Témoignages */}
+      {temoignages.length > 0 && (
+        <section className="px-2 py-8 sm:px-4">
+          {/*
+            Les témoignages sur un champ dégradé, comme dans la référence : le
+            passage d'un fond plat à une lumière signale que la page change de
+            registre - on quitte l'argumentaire pour la parole des utilisateurs.
+          */}
+          <div className="champ-degrade-clair rounded-xl px-margin-mobile py-16 sm:rounded-[1.75rem] lg:px-12 lg:py-20">
+            <div className="mx-auto max-w-container-max">
+              <EnTeteSection
+                titre="Ce qu'en disent les candidats"
+                soustitre="Des avis laissés après une formation suivie jusqu'au bout."
+              />
+              <TemoignagesSection temoignages={temoignages} />
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Pourquoi */}
-      <section className="mx-auto max-w-container-max px-margin-mobile py-24 lg:px-margin-desktop">
-        <h2 className="mb-16 text-center font-headline text-3xl font-bold text-primary">
-          Pourquoi choisir Orient2Work ?
-        </h2>
-        <div className="grid gap-10 md:grid-cols-3">
-          {advantages.map((a) => (
-            <div key={a.title} className="p-6 text-center">
-              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-xl bg-surface-container text-primary">
-                <Icon name={a.icon} className="text-3xl" />
-              </div>
-              <h3 className="mb-3 text-xl font-bold text-primary">{a.title}</h3>
-              <p className="text-on-surface-variant">{a.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Formations à l'honneur */}
-      <section className="bg-surface-container py-24">
-        <div className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop">
-          <div className="mb-12 flex items-end justify-between">
-            <div>
-              <h2 className="font-headline text-3xl font-bold text-primary">Formations à l&apos;honneur</h2>
-              <p className="text-on-surface-variant">Développez les compétences les plus recherchées.</p>
-            </div>
-            <ButtonLink href="/formations" variant="ghost" className="hidden sm:inline-flex">
-              Toutes les formations <Icon name="arrow_forward" className="text-[18px]" />
-            </ButtonLink>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {formations.slice(0, 4).map((f) => (
-              <FormationCard key={f.id} formation={f} href="/formations" />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* Offres récentes */}
-      <section className="mx-auto max-w-container-max px-margin-mobile py-24 lg:px-margin-desktop">
-        <div className="mb-12 flex items-end justify-between">
-          <div>
-            <h2 className="font-headline text-3xl font-bold text-primary">Dernières opportunités</h2>
-            <p className="text-on-surface-variant">Des offres publiées par nos entreprises partenaires.</p>
-          </div>
-          <ButtonLink href="/offres" variant="ghost" className="hidden sm:inline-flex">
-            Toutes les offres <Icon name="arrow_forward" className="text-[18px]" />
-          </ButtonLink>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {offres
-            .filter((o) => o.status === "publiee")
-            .map((o) => (
-              <OffreCard key={o.id} offre={o} href="/offres" />
-            ))}
-        </div>
-      </section>
+      {/*
+        FAQ : la dernière levée d'objection avant l'appel final. Elle disparaît
+        entièrement si le back-office n'a rien saisi — une rubrique « questions
+        fréquentes » vide en dit plus long qu'une absence de rubrique.
+      */}
+      {questions.length > 0 && (
+        <section className="mx-auto max-w-container-max px-margin-mobile py-16 lg:px-margin-desktop lg:py-20">
+          <Reveal>
+            <FaqSection questions={questions} />
+          </Reveal>
+        </section>
+      )}
 
-      {/* Forums banner */}
-      <section className="bg-secondary-container py-14">
-        <div className="mx-auto flex max-w-container-max flex-col items-center justify-between gap-8 px-margin-mobile text-on-secondary-container md:flex-row lg:px-margin-desktop">
-          <div>
-            <h2 className="mb-2 font-headline text-2xl font-bold">
+      {/* Forums : panneau dégradé, le point final de la page */}
+      <section className="px-2 pb-2 sm:px-4 sm:pb-4">
+        <Reveal className="champ-degrade relative overflow-hidden rounded-xl px-margin-mobile py-16 text-center text-white sm:rounded-[1.75rem] lg:py-20">
+          <div className="relative mx-auto max-w-2xl">
+            <h2 className="text-balance font-headline text-3xl font-extrabold tracking-tight sm:text-4xl">
               Forums Entreprises &amp; Écoles Supérieures
             </h2>
-            <p className="font-medium">
-              Découvrez les opportunités de demain en rencontrant nos partenaires académiques.
+            <p className="mt-3 text-white/75">
+              Rencontrez nos partenaires académiques et les entreprises qui recrutent, en
+              présentiel.
             </p>
+            <div className="mt-8">
+              <ButtonLink href="/a-propos" variant="secondary" size="lg">
+                Découvrir le calendrier
+              </ButtonLink>
+            </div>
           </div>
-          <ButtonLink href="/a-propos" variant="primary" size="lg" className="whitespace-nowrap">
-            Découvrir le calendrier
-          </ButtonLink>
-        </div>
+        </Reveal>
       </section>
     </>
   );

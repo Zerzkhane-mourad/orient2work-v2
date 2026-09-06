@@ -8,6 +8,20 @@ export const APP_OWNER = "OMB";
 export const APP_TAGLINE = "De l'orientation à l'opportunité professionnelle.";
 export const QUIZ_PASS_SCORE = 80; // % minimum pour valider le compte jeune
 
+/**
+ * Nombre minimum de questions dans le test d'une formation.
+ *
+ * Guide la saisie ; la règle est appliquée par le serveur (`domain/quiz.ts`).
+ * Une question unique ne note rien : les seuls scores possibles sont 0 % et
+ * 100 %, et le seuil de réussite perd tout sens.
+ *
+ * VOCABULAIRE — le code, les routes et les tables disent « quiz » ; l'interface
+ * dit « test ». Deux tests coexistent, et leurs libellés les distinguent :
+ *  • « test de la formation » — valide les acquis d'un cours ;
+ *  • « test de validation du compte » (§5.3) — valide le compte d'un jeune.
+ */
+export const QUIZ_MIN_QUESTIONS = 2;
+
 /** Roles — strict separation between jeune, entreprise and admin (§16). */
 export type Role = "jeune" | "entreprise" | "admin";
 
@@ -67,34 +81,14 @@ export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
 export const WORK_MODES = ["Présentiel", "Hybride", "À distance"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
-/** Domaines / filières couverts par les tests et les offres (§5.3). */
-export const FILIERES = [
-  "Informatique",
-  "Réseaux et télécommunications",
-  "Développement web",
-  "Data",
-  "Intelligence artificielle",
-  "Commerce",
-  "Marketing",
-  "Finance",
-  "Gestion",
-  "Génie industriel",
-  "Communication",
-] as const;
-export type Filiere = (typeof FILIERES)[number];
-
 /** Niveaux d'études. */
 export const NIVEAUX_ETUDES = ["Bac", "Bac+2", "Bac+3", "Bac+5", "Doctorat"] as const;
 
-/** Catégories de formations communes (§7.4). */
-export const FORMATION_CATEGORIES = [
-  "CV",
-  "Lettre de motivation",
-  "Entretien",
-  "LinkedIn",
-  "Recherche d'emploi",
-  "Soft skills",
-  "Préparation forum",
-  "Orientation professionnelle",
-] as const;
-export type FormationCategory = (typeof FORMATION_CATEGORIES)[number];
+/**
+ * Filières et catégories de formation (§7.4) ne sont plus des constantes.
+ *
+ * Elles vivent en base et s'administrent depuis `/admin/referentiels` : les
+ * figer ici obligerait à redéployer pour en ajouter une. Utilisez les hooks
+ * `useFilieres` / `useCategories` (`src/features/admin/use-referentiel.ts`),
+ * qui les lisent via l'API — y compris pour un visiteur non connecté.
+ */

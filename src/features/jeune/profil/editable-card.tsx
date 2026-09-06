@@ -1,11 +1,11 @@
 "use client";
 
-import { Card, CardBody, Icon } from "@/components/ui";
+import { Card, CardBody, Icon, type IconName } from "@/components/ui";
 
 interface EditableCardProps {
   title: string;
   /** Icon for the action button — "edit" by default, "add" for collections. */
-  actionIcon?: string;
+  actionIcon?: IconName;
   actionLabel: string;
   onAction: () => void;
   children: React.ReactNode;

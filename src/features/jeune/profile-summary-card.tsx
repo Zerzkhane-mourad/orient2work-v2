@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Avatar, Card, Icon, ProgressBar, StatusBadge } from "@/components/ui";
+import { Avatar, Card, Icon, ProgressBar, ProtectedImage, StatusBadge } from "@/components/ui";
 import { useProfile } from "./profil/profile-store";
+import { ScoreCard } from "./score-card";
 
 /** LinkedIn-style left-rail identity card: cover banner, overlapping avatar, quick stats. */
 export function ProfileSummaryCard() {
@@ -13,18 +14,24 @@ export function ProfileSummaryCard() {
     { icon: "description", label: "Mes documents", href: "/espace-jeune/documents" },
     { icon: "school", label: "Mes formations", href: "/espace-jeune/formations" },
     { icon: "send", label: "Mes candidatures", href: "/espace-jeune/candidatures" },
-  ];
+  ] as const;
 
   return (
     <Card className="overflow-hidden">
-      {/* Cover banner */}
-      {jeune.banniere ? (
-        // Data URL from the device — next/image adds no value here.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={jeune.banniere} alt="" className="h-16 w-full object-cover" />
-      ) : (
-        <div className="h-16 bg-gradient-to-r from-primary via-primary-container to-surface-tint" />
-      )}
+      {/*
+        La bannière est un document PROTÉGÉ. Elle était rendue ici avec l'URL
+        brute de l'API : chemin relatif résolu contre l'origine du frontend, et
+        sans jeton — d'où une image affichée sur la page profil et sur aucune
+        autre. Le commentaire d'origine parlait d'une « data URL de l'appareil »,
+        ce qui n'était plus vrai depuis le branchement sur l'API.
+      */}
+      <ProtectedImage
+        src={jeune.banniere}
+        className="h-16 w-full object-cover"
+        fallback={
+          <div className="h-16 bg-gradient-to-r from-inverse-surface via-primary to-surface-tint" />
+        }
+      />
 
       <div className="px-4 pb-4">
         {/* Avatar overlapping the banner */}
@@ -62,6 +69,9 @@ export function ProfileSummaryCard() {
         </div>
         <ProgressBar value={jeune.profilCompletion} className="h-1.5" />
       </Link>
+
+      {/* Employability score — grows with formations, profile, test and applications */}
+      <ScoreCard compact />
 
       {/* Quick stats */}
       <div className="border-t border-outline-variant px-4 py-3">

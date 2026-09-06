@@ -1,0 +1,2183 @@
+openapi: 3.0.3
+
+info:
+  title: Orient2Work API
+  version: 1.0.0
+  description: |
+    API REST de la plateforme Orient2Work (OMB) — orientation, formation et mise en
+    relation entre jeunes diplômés et entreprises.
+
+    ## Authentification
+
+    Deux jetons complémentaires :
+
+    | Jeton | Transport | Durée | Rôle |
+    |---|---|---|---|
+    | Access token | En-tête `Authorization: Bearer <token>` | 15 min | Autorise chaque appel |
+    | Refresh token | Cookie `o2w_refresh` (httpOnly, secure, sameSite=strict) | 7 j | Renouvelle l'access token |
+
+    Le refresh token **tourne à chaque usage**. Le rejeu d'un token déjà consommé
+    est traité comme un vol : toutes les sessions du compte sont révoquées.
+
+    Les routes `POST /auth/refresh` et `POST /auth/deconnexion` s'authentifient par
+    cookie : elles exigent l'en-tête `x-csrf-token` recopié depuis le cookie
+    `o2w_csrf` (double submit).
+
+    ## Enveloppe de réponse
+
+    Succès : `{ "success": true, "data": …, "meta"?: { page, perPage, total, totalPages } }`
+
+    Erreur : `{ "success": false, "error": { "code": "…", "message": "…", "details"?: … } }`
+
+    Aucune stack trace ni détail interne n'est renvoyé en production.
+
+  contact:
+    name: OMB — Orient2Work
+  license:
+    name: Propriétaire
+
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Développement
+  - url: https://api.orient2work.ma/api/v1
+    description: Production
+
+tags:
+  - name: Auth
+    description: Inscription, connexion, session, mot de passe
+  - name: Jeunes
+    description: Profil jeune, expériences, liens, recherche de talents
+  - name: Entreprises
+    description: Profil entreprise et annuaire public
+  - name: Offres
+    description: Publication et recherche d'opportunités
+  - name: Candidatures
+    description: Postuler et suivre les candidatures
+  - name: Formations
+    description: Catalogue e-learning, progression, quiz, avis
+  - name: Entretiens
+    description: Planification et réponse aux entretiens
+  - name: Test
+    description: Test de validation du compte jeune
+  - name: Notifications
+  - name: Documents
+    description: CV, photo, bannière, logo
+  - name: Contact
+    description: Formulaire de contact public et newsletter
+  - name: Admin
+    description: Modération et statistiques (rôle ADMIN)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /referentiels:
+    get:
+      tags: [Auth]
+      summary: Listes de valeurs (filières, types d'offre, niveaux…)
+      security: []
+      responses:
+        "200":
+          description: Référentiels
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Success"
+
+  /referentiels/categories-formation:
+    get:
+      tags: [Auth]
+      summary: Catégories de formation actives
+      description: |
+        Entrées ACTIVES seulement, sans pagination : elles alimentent des listes
+        déroulantes et des onglets, qui ont besoin de toutes les valeurs
+        proposables. Le volume est borné — c'est un référentiel administré.
+      security: []
+      responses:
+        "200":
+          description: Entrées du référentiel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReferentielEntree" }
+
+  /referentiels/filieres:
+    get:
+      tags: [Auth]
+      summary: Filières actives
+      description: Mêmes règles que les catégories de formation.
+      security: []
+      responses:
+        "200":
+          description: Entrées du référentiel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReferentielEntree" }
+    post:
+      tags: [Auth]
+      summary: Proposer une filière absente de la liste
+      description: |
+        Ouvert SANS COMPTE : un candidat qui ne trouve pas sa filière à
+        l'inscription (§5.1) la saisit, et elle est créée **active** — donc
+        aussitôt proposée aux visiteurs suivants.
+
+        Un nom équivalent — à la casse, aux accents, aux espaces multiples et
+        aux tirets près — renvoie l'entrée EXISTANTE au lieu d'en créer une
+        jumelle. L'appelant obtient donc toujours un identifiant à rattacher,
+        sans avoir à distinguer les deux cas, d'où un 200 et non un 201.
+
+        Seul référentiel ouvert ainsi : les catégories de formation restent
+        purement administratives. Écriture anonyme, donc limitée en débit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom]
+              properties:
+                nom: { type: string, minLength: 2, maxLength: 60 }
+      responses:
+        "200":
+          description: Filière créée, ou entrée existante équivalente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/ReferentielEntree" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/inscription/jeune:
+    post:
+      tags: [Auth]
+      summary: Inscription d'un jeune
+      description: |
+        Réponse volontairement identique que l'email soit déjà inscrit ou non
+        (protection contre l'énumération de comptes). Un email de vérification
+        est envoyé.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterJeune" }
+      responses:
+        "201": { $ref: "#/components/responses/Message" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/inscription/entreprise:
+    post:
+      tags: [Auth]
+      summary: Inscription d'une entreprise
+      description: Le compte est créé au statut `attente_contact` et doit être validé par OMB.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterEntreprise" }
+      responses:
+        "201": { $ref: "#/components/responses/Message" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /auth/connexion:
+    post:
+      tags: [Auth]
+      summary: Ouvrir une session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Session ouverte. Le refresh token est posé en cookie httpOnly.
+          headers:
+            Set-Cookie:
+              description: "`o2w_refresh` (httpOnly) et `o2w_csrf` (lisible par le frontend)"
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renouveler l'access token (rotation du refresh token)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Nouveau couple de jetons
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /auth/deconnexion:
+    post:
+      tags: [Auth]
+      summary: Fermer la session courante
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204": { description: Session fermée }
+
+  /auth/deconnexion-globale:
+    post:
+      tags: [Auth]
+      summary: Révoquer toutes les sessions du compte
+      responses:
+        "204": { description: Sessions révoquées }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/verification-email:
+    post:
+      tags: [Auth]
+      summary: Confirmer l'adresse email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/mot-de-passe/oubli:
+    post:
+      tags: [Auth]
+      summary: Demander une réinitialisation
+      description: Réponse constante, que le compte existe ou non.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+
+  /auth/mot-de-passe/reinitialisation:
+    post:
+      tags: [Auth]
+      summary: Définir un nouveau mot de passe
+      description: Révoque toutes les sessions existantes du compte.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, format: password, minLength: 12 }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/mot-de-passe:
+    patch:
+      tags: [Auth]
+      summary: Changer son mot de passe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password, minLength: 12 }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /auth/moi:
+    get:
+      tags: [Auth]
+      summary: Identité de la session courante
+      responses:
+        "200":
+          description: Utilisateur
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /jeunes/moi:
+    get:
+      tags: [Jeunes]
+      summary: Profil du jeune connecté
+      responses:
+        "200":
+          description: Profil complet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/Jeune" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [Jeunes]
+      summary: Mettre à jour son profil
+      description: |
+        `status`, `scoreQuiz`, `profilCompletion` et `score` ne sont pas modifiables :
+        ils sont dérivés ou pilotés par l'administration. Tout champ inconnu est
+        rejeté en 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateJeune" }
+      responses:
+        "200":
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/Jeune" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /jeunes/moi/experiences:
+    post:
+      tags: [Jeunes]
+      summary: Ajouter une expérience
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Experience" }
+      responses:
+        "201":
+          description: Profil mis à jour
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /jeunes/moi/experiences/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Jeunes]
+      summary: Modifier une expérience
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Experience" }
+      responses:
+        "200": { description: Profil mis à jour }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Jeunes]
+      summary: Supprimer une expérience
+      responses:
+        "200": { description: Profil mis à jour }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jeunes/talents:
+    get:
+      tags: [Jeunes]
+      summary: Recherche de talents
+      description: |
+        Réservée aux entreprises **validées** par OMB. Ne renvoie que les profils
+        au statut `valide`, en vue publique (sans email, téléphone ni liens).
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - name: filiereId
+          in: query
+          description: Identifiant de filière, obtenu via `/referentiels/filieres`.
+          schema: { type: string, format: uuid }
+        - { name: ville, in: query, schema: { type: string } }
+        - { name: niveauEtudes, in: query, schema: { type: string } }
+        - {
+            name: competences,
+            in: query,
+            description: "Liste séparée par des virgules",
+            schema: { type: string },
+          }
+        - { name: scoreMin, in: query, schema: { type: integer, minimum: 0, maximum: 100 } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée de profils publics }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /jeunes/{id}:
+    get:
+      tags: [Jeunes]
+      summary: Consulter un profil
+      description: Vue publique pour un tiers, vue complète pour le propriétaire et l'admin.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { description: Profil }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /entreprises:
+    get:
+      tags: [Entreprises]
+      summary: Annuaire des entreprises validées
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: ville, in: query, schema: { type: string } }
+        - { name: secteur, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+
+  /entreprises/moi:
+    get:
+      tags: [Entreprises]
+      summary: Profil de l'entreprise connectée
+      responses:
+        "200":
+          description: Profil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/Entreprise" }
+    patch:
+      tags: [Entreprises]
+      summary: Mettre à jour son profil
+      description: Le `status` n'est pas modifiable ici — c'est une décision admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateEntreprise" }
+      responses:
+        "200": { description: Profil mis à jour }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /offres:
+    get:
+      tags: [Offres]
+      summary: Rechercher des offres
+      description: N'expose que les offres publiées dont la date limite n'est pas dépassée.
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - {
+            name: type,
+            in: query,
+            schema: { type: string, enum: [Stage, Emploi, PFE, Alternance, Freelance, Projet] },
+          }
+        - {
+            name: mode,
+            in: query,
+            schema: { type: string, enum: ["Présentiel", "Hybride", "À distance"] },
+          }
+        - name: filiereId
+          in: query
+          description: Identifiant de filière, obtenu via `/referentiels/filieres`.
+          schema: { type: string, format: uuid }
+        - { name: ville, in: query, schema: { type: string } }
+        - { name: niveauDemande, in: query, schema: { type: string } }
+        - {
+            name: sort,
+            in: query,
+            schema: { type: string, enum: [recent, dateLimite, candidatures], default: recent },
+          }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Liste paginée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Offre" }
+                  meta: { $ref: "#/components/schemas/Meta" }
+    post:
+      tags: [Offres]
+      summary: Créer une offre
+      description: |
+        Réservé aux entreprises **validées**. Le statut ne peut être que `brouillon`
+        ou `attente_validation` : la publication est une décision d'administrateur.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOffre" }
+      responses:
+        "201":
+          description: Offre créée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/Offre" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /offres/mes-offres:
+    get:
+      tags: [Offres]
+      summary: Offres de l'entreprise connectée (tous statuts)
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/OffreStatus" } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+
+  /offres/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Offres]
+      summary: Détail d'une offre
+      security: []
+      responses:
+        "200": { description: Offre }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Offres]
+      summary: Modifier une offre
+      description: |
+        Réservé à l'entreprise propriétaire. Une modification du titre, de la
+        description ou de la filière sur une offre publiée la repasse
+        automatiquement en `attente_validation`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOffre" }
+      responses:
+        "200": { description: Offre mise à jour }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [Offres]
+      summary: Désactiver une offre
+      description: L'offre passe en `desactivee` ; les candidatures reçues sont préservées.
+      responses:
+        "204": { description: Offre désactivée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /candidatures:
+    post:
+      tags: [Candidatures]
+      summary: Postuler à une offre
+      description: |
+        Exige un compte jeune au statut `valide` et un email confirmé. Une seule
+        candidature par offre. Le CV joint doit appartenir au candidat.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [offreId]
+              properties:
+                offreId: { type: string, format: uuid }
+                message: { type: string, maxLength: 2000 }
+                cvId: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Candidature enregistrée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/Candidature" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /candidatures/mes-candidatures:
+    get:
+      tags: [Candidatures]
+      summary: Candidatures envoyées par le jeune connecté
+      parameters:
+        - name: status
+          in: query
+          description: |
+            Un statut, ou plusieurs séparés par des virgules
+            (`envoyee,vue,preselectionnee`). Permet aux onglets qui regroupent
+            des statuts de rester paginés côté serveur.
+          schema: { type: string, example: "envoyee,vue" }
+        - name: offreId
+          in: query
+          description: Restreint à une offre — répond à « ai-je déjà candidaté ? ».
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+
+  /candidatures/mes-candidatures/compteurs:
+    get:
+      tags: [Candidatures]
+      summary: Nombre de candidatures par statut
+      description: |
+        Porte sur la TOTALITÉ des candidatures du jeune, indépendamment de la
+        pagination : les onglets affichent des totaux qui ne peuvent pas être
+        déduits de la page courante.
+      responses:
+        "200":
+          description: Totaux par statut
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Success"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties: { type: integer }
+                        example: { envoyee: 4, vue: 2, entretien: 1 }
+
+  /candidatures/recues:
+    get:
+      tags: [Candidatures]
+      summary: Candidatures reçues sur les offres de l'entreprise connectée
+      parameters:
+        - name: status
+          in: query
+          description: Un statut, ou plusieurs séparés par des virgules.
+          schema: { type: string, example: "preselectionnee,entretien" }
+        - { name: offreId, in: query, schema: { type: string, format: uuid } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée (vue recruteur) }
+
+  /candidatures/{id}/statut:
+    patch:
+      tags: [Candidatures]
+      summary: Faire évoluer le statut d'une candidature
+      description: Réservé à l'entreprise propriétaire de l'offre. `retiree` n'est pas accepté ici.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [vue, preselectionnee, entretien, acceptee, refusee]
+      responses:
+        "200": { description: Candidature mise à jour }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /candidatures/{id}/retrait:
+    post:
+      tags: [Candidatures]
+      summary: Retirer sa candidature
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { description: Candidature retirée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /formations:
+    get:
+      tags: [Formations]
+      summary: Catalogue des formations
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - name: categorieId
+          in: query
+          description: |
+            Identifiant de catégorie, obtenu via `/referentiels/categories-formation`.
+            Le filtre porte sur l'identifiant et non sur le libellé : un renommage
+            depuis le back-office ne casse ni un lien partagé, ni un onglet en favori.
+          schema: { type: string, format: uuid }
+        - name: filiereId
+          in: query
+          description: Identifiant de filière, obtenu via `/referentiels/filieres`.
+          schema: { type: string, format: uuid }
+        - { name: certifiante, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          { description: "Liste paginée, enrichie de la progression si un jeune est connecté" }
+    post:
+      tags: [Admin]
+      summary: Créer une formation
+      description: |
+        Réservé à l'ADMIN. Le `contenuHtml` est assaini (whitelist de balises).
+
+        La catégorie est désignée par `categorieId` : l'entrée doit exister ET être
+        active dans le référentiel, sinon 422 sur ce champ. En lecture, la réponse
+        expose `categorie` (libellé, pour l'affichage) ET `categorieId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titre, description, categorieId, contenuHtml]
+              properties:
+                titre: { type: string }
+                sousTitre: { type: string }
+                description: { type: string }
+                categorieId: { type: string, format: uuid }
+                filiereId: { type: string, format: uuid, description: Identifiant de filière (référentiel). }
+                niveau: { type: string }
+                tempsLectureMin: { type: integer }
+                certifiante: { type: boolean }
+                contenuHtml: { type: string }
+                publiee: { type: boolean }
+      responses:
+        "201": { description: Formation créée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /formations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Formations]
+      summary: Détail d'une formation
+      description: |
+        Les bonnes réponses du quiz (`bonnesReponses`, `explication`) ne sont
+        renvoyées qu'à un administrateur : la correction reste côté serveur.
+      security: []
+      responses:
+        "200": { description: Formation }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /formations/{id}/progression:
+    put:
+      tags: [Formations]
+      summary: Enregistrer l'avancement de lecture
+      description: La progression est monotone — elle ne redescend jamais.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [progression]
+              properties:
+                progression: { type: integer, minimum: 0, maximum: 100 }
+                lu: { type: boolean }
+      responses:
+        "200": { description: Progression enregistrée }
+
+  /formations/{id}/quiz:
+    patch:
+      tags: [Formations]
+      summary: Modifier l'entête du quiz d'une formation
+      description: |
+        Titre, consigne et score minimum. Le quiz est créé au besoin.
+        Réservé aux administrateurs. Renvoie la formation rechargée.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                titre: { type: string }
+                description: { type: string }
+                scoreMinimum: { type: integer, minimum: 0, maximum: 100 }
+      responses:
+        "200": { description: Formation rechargée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Formations]
+      summary: Supprimer le quiz d'une formation
+      description: |
+        Réservé aux administrateurs. Les questions partent avec le quiz et la
+        formation se valide alors à la simple lecture.
+
+        C'est la SEULE façon d'enlever un quiz : le vider question par question
+        laisserait, à l'avant-dernière, un quiz d'une seule question que le
+        serveur refuse. Les scores déjà obtenus ne sont pas recalculés.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { description: "Formation rechargée, sans quiz" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Formations]
+      summary: Soumettre le quiz de validation
+      description: |
+        La correction est calculée **exclusivement côté serveur** à partir de la
+        base. Le cours doit avoir été lu jusqu'au bout.
+
+        `reponses` est un tableau d'index dans `options`, quel que soit le type
+        de question : une seule valeur pour `qcm` et `vrai_faux`, autant que
+        nécessaire pour `choix_multiples`. Une question à choix multiples n'est
+        comptée juste que si l'ensemble coché est **exactement** le corrigé —
+        tout cocher ne rapporte donc rien. Un tableau vide vaut « sans réponse ».
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reponses]
+              properties:
+                reponses:
+                  type: array
+                  items: { $ref: "#/components/schemas/QuizAnswer" }
+      responses:
+        "200":
+          description: Résultat et correction détaillée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      score: { type: integer }
+                      scoreMinimum: { type: integer }
+                      reussi: { type: boolean }
+                      corrections: { type: array, items: { type: object } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /formations/{id}/quiz/questions:
+    post:
+      tags: [Formations]
+      summary: Ajouter une question au quiz d'une formation
+      description: |
+        Réservé aux administrateurs. Le quiz est créé au besoin : ajouter une
+        première question n'impose pas de créer le quiz au préalable.
+
+        `PATCH /formations/{id}` réécrit le quiz **en bloc** (import,
+        duplication) et renouvelle donc l'identifiant des questions ; cette
+        route-ci ne touche qu'une question et préserve les autres, auxquelles
+        les tentatives déjà passées font référence.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuizQuestionInput" }
+      responses:
+        "201": { description: Formation rechargée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /formations/{id}/quiz/questions/{questionId}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: questionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Formations]
+      summary: Modifier une question du quiz d'une formation
+      description: |
+        Réservé aux administrateurs. Modification partielle : la cohérence
+        (type ↔ options ↔ bonnes réponses) est vérifiée sur la question
+        **fusionnée**, pas sur les seuls champs envoyés. Une question qui
+        n'appartient pas au quiz de cette formation donne une 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuizQuestionPatch" }
+      responses:
+        "200": { description: Formation rechargée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Formations]
+      summary: Supprimer une question du quiz d'une formation
+      description: |
+        Réservé aux administrateurs. Les scores déjà obtenus ne sont pas
+        recalculés : la suppression ne vaut que pour les tentatives à venir.
+
+        Refusée en 422 si elle ferait tomber le quiz sous **2 questions** : un
+        quiz d'une seule question ne note rien, ses seuls scores possibles étant
+        0 % et 100 %. Pour l'enlever, supprimez le quiz entier.
+      responses:
+        "200": { description: Formation rechargée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /formations/{id}/avis:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Formations]
+      summary: Avis sur une formation
+      security: []
+      responses:
+        "200": { description: Liste paginée }
+    put:
+      tags: [Formations]
+      summary: Déposer ou mettre à jour son avis
+      description: Un seul avis par jeune et par formation ; la formation doit avoir été lue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: integer, minimum: 1, maximum: 5 }
+                commentaire: { type: string, maxLength: 2000 }
+      responses:
+        "201": { description: Avis enregistré }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /entretiens:
+    get:
+      tags: [Entretiens]
+      summary: Entretiens de l'utilisateur connecté
+      description: Le périmètre est déduit du rôle, jamais d'un paramètre client.
+      parameters:
+        - name: status
+          in: query
+          description: |
+            Un statut, ou plusieurs séparés par des virgules (`refuse,annule`).
+            Chaque section d'écran pagine ainsi son propre groupe.
+          schema: { type: string, example: "refuse,annule" }
+        - { name: from, in: query, schema: { type: string, example: "2026-09-01" } }
+        - { name: to, in: query, schema: { type: string, example: "2026-09-30" } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+    post:
+      tags: [Entretiens]
+      summary: Proposer un entretien
+      description: Réservé aux entreprises validées ; le candidat doit avoir un profil validé.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jeuneId, offreTitre, date, heure]
+              properties:
+                jeuneId: { type: string, format: uuid }
+                offreId: { type: string, format: uuid }
+                offreTitre: { type: string }
+                date: { type: string, example: "2026-09-15" }
+                heure: { type: string, example: "14:00" }
+                lienReunion: { type: string, format: uri }
+                commentaire: { type: string }
+      responses:
+        "201": { description: Entretien proposé }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /entretiens/compteurs:
+    get:
+      tags: [Entretiens]
+      summary: Nombre d'entretiens par statut
+      description: |
+        Porte sur la TOTALITÉ du périmètre de l'appelant (déduit de son rôle).
+        Alimente les cartes de synthèse pendant que chaque section est paginée.
+      responses:
+        "200":
+          description: Totaux par statut
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Success"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties: { type: integer }
+                        example: { en_attente: 2, accepte: 5 }
+
+  /entretiens/{id}/reponse:
+    post:
+      tags: [Entretiens]
+      summary: Accepter ou refuser un entretien
+      description: Seul le candidat concerné peut répondre.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [accepte, refuse] }
+                commentaire: { type: string }
+      responses:
+        "200": { description: Réponse enregistrée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /test/questions:
+    get:
+      tags: [Test]
+      summary: Le test du candidat et ses questions
+      description: |
+        Le candidat reçoit LE test de sa filière, ou le test commun si sa
+        filière n'en a pas. Les bonnes réponses ne sont jamais incluses.
+
+        La réponse porte `test` (identifiant, titre, consigne, filière) et
+        `questions` — le candidat sait ainsi quelle épreuve il passe.
+
+        404 quand aucun test n'est disponible : la filière n'a pas le sien et il
+        n'existe pas de test commun, ou le test servi n'a aucune question active.
+      parameters:
+        - name: filiereId
+          in: query
+          description: Identifiant de filière, obtenu via `/referentiels/filieres`.
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Test et ses questions }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /test/soumission:
+    post:
+      tags: [Test]
+      summary: Soumettre le test
+      description: |
+        Corrigé côté serveur. Un score ≥ 80 % fait passer le compte au statut
+        `valide`, ce qui débloque la candidature aux offres.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reponses]
+              properties:
+                reponses:
+                  type: array
+                  items: { $ref: "#/components/schemas/QuizAnswer" }
+      responses:
+        "200":
+          description: Résultat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      score: { type: integer }
+                      scoreMinimum: { type: integer }
+                      reussi: { type: boolean }
+                      status: { $ref: "#/components/schemas/JeuneStatus" }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Notifications de l'utilisateur connecté
+      parameters:
+        - { name: unreadOnly, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: "Liste paginée + compteur de non-lues" }
+
+  /notifications/tout-lu:
+    post:
+      tags: [Notifications]
+      summary: Marquer toutes les notifications comme lues
+      responses:
+        "200": { description: Nombre de notifications mises à jour }
+
+  /documents:
+    get:
+      tags: [Documents]
+      summary: Documents de l'utilisateur connecté
+      parameters:
+        - {
+            name: type,
+            in: query,
+            schema: { type: string, enum: [CV, PHOTO, BANNIERE, LOGO, AUTRE] },
+          }
+      responses:
+        "200": { description: Liste paginée }
+
+  /documents/{type}:
+    post:
+      tags: [Documents]
+      summary: Déposer un fichier
+      description: |
+        Type MIME, extension, signature binaire (magic bytes) et taille sont
+        vérifiés. Le fichier est stocké hors du répertoire servi statiquement,
+        sous un nom généré aléatoirement.
+
+        - `CV` : PDF, 5 Mo max
+        - `PHOTO` / `BANNIERE` / `LOGO` : JPEG, PNG, WebP (SVG exclu — risque de XSS)
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { type: string, enum: [CV, PHOTO, BANNIERE, LOGO, AUTRE] }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201": { description: Document enregistré }
+        "413": { description: Fichier trop volumineux }
+        "415": { description: Type de fichier non autorisé }
+
+  /documents/{id}/contenu:
+    get:
+      tags: [Documents]
+      summary: Télécharger un document
+      description: |
+        Les droits sont revérifiés à chaque appel : un CV n'est lisible que par son
+        propriétaire, par une entreprise à qui il a été envoyé via une candidature,
+        ou par un admin.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Fichier
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /formations/{id}/avis/{itemId}/utile:
+    post:
+      tags: [Formations]
+      summary: Basculer le vote « utile » sur un avis
+      description: |
+        Un vote par jeune et par avis, garanti par une table de jointure : le
+        compteur ne peut pas être gonflé en cliquant plusieurs fois. Voter pour
+        son propre avis est refusé.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Avis mis à jour }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contact:
+    post:
+      tags: [Contact]
+      summary: Envoyer un message à l'équipe OMB
+      description: |
+        Route publique, limitée à 5 requêtes par IP et par fenêtre. Le contenu
+        est assaini avant persistance (il est réaffiché dans l'espace admin).
+        L'adresse IP est conservée pour diagnostic mais n'est jamais renvoyée.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, email, sujet, message]
+              properties:
+                nom: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                sujet: { type: string, maxLength: 200 }
+                message: { type: string, minLength: 10, maxLength: 5000 }
+      responses:
+        "201": { $ref: "#/components/responses/Message" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /newsletter:
+    post:
+      tags: [Contact]
+      summary: S'inscrire à la newsletter
+      description: |
+        Idempotent : la réponse est identique que l'adresse soit nouvelle, déjà
+        inscrite ou en réinscription, ce qui empêche de tester l'appartenance à
+        la liste. Un email de confirmation contient le lien de désinscription.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "201": { $ref: "#/components/responses/Message" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /newsletter/desinscription:
+    post:
+      tags: [Contact]
+      summary: Se désinscrire de la newsletter
+      description: |
+        Exige le jeton reçu par email (stocké haché en base) : connaître une
+        adresse ne suffit pas à désinscrire son titulaire.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/contact:
+    get:
+      tags: [Admin]
+      summary: Messages reçus depuis le formulaire de contact
+      parameters:
+        - { name: traite, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/contact/{id}:
+    patch:
+      tags: [Admin]
+      summary: Marquer un message comme traité (ou le rouvrir)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [traite]
+              properties:
+                traite: { type: boolean }
+      responses:
+        "200": { description: Message mis à jour }
+
+  /admin/newsletter:
+    get:
+      tags: [Admin]
+      summary: Abonnés actifs à la newsletter
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/tests:
+    get:
+      tags: [Admin]
+      summary: Tests de validation des comptes
+      description: |
+        Un test par filière, plus un test commun (`filiereId: null`) servi aux
+        candidats dont la filière n'a pas le sien.
+
+        Chaque entrée porte `_count.questions` ; les questions elles-mêmes ne
+        sont chargées que sur la fiche d'un test.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Liste paginée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Admin]
+      summary: Créer un test de validation
+      description: |
+        Sans `filiereId`, le test est **commun**. Une filière ne peut porter
+        qu'un seul test et il n'existe qu'un test commun : un second donne 409.
+
+        Les questions peuvent être fournies dès la création ou ajoutées ensuite.
+        Pas d'`explication` sur ces questions, contrairement au test d'une
+        formation : ce test ne renvoie au candidat que son score, jamais la
+        correction — la lui montrer suffirait à réussir la tentative suivante.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titre]
+              properties:
+                titre: { type: string, maxLength: 200 }
+                description: { type: string, maxLength: 1000 }
+                filiereId: { type: string, format: uuid }
+                active: { type: boolean, default: true }
+                questions:
+                  type: array
+                  maxItems: 50
+                  items: { $ref: "#/components/schemas/QuizQuestionBase" }
+      responses:
+        "201": { description: "Test créé, avec ses questions" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/tests/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Admin]
+      summary: Un test et ses questions
+      description: |
+        Vue administrateur : `bonnesReponses` est inclus, et les questions
+        désactivées le sont aussi — sans quoi aucune ne pourrait être réactivée.
+      responses:
+        "200": { description: Test avec ses questions }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Admin]
+      summary: Modifier un test
+      description: |
+        `filiereId: null` rend le test commun ; omettre le champ laisse le
+        ciblage inchangé. Viser une filière qui a déjà un test donne 409.
+
+        Désactiver un test (`active: false`) le retire des passages à venir sans
+        toucher aux tentatives déjà enregistrées.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                titre: { type: string, maxLength: 200 }
+                description: { type: string, maxLength: 1000 }
+                filiereId: { type: string, format: uuid, nullable: true }
+                active: { type: boolean }
+      responses:
+        "200": { description: Test mis à jour }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Admin]
+      summary: Supprimer un test
+      description: |
+        Ses questions partent avec lui, et les candidats de la filière basculent
+        sur le test commun. Les tentatives déjà enregistrées sont conservées.
+      responses:
+        "204": { description: Test supprimé }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/tests/{id}/questions:
+    post:
+      tags: [Admin]
+      summary: Ajouter une question à un test
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/QuizQuestionBase"
+                - type: object
+                  properties:
+                    active: { type: boolean, default: true }
+      responses:
+        "201": { description: Test rechargé }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/tests/{id}/questions/{questionId}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: questionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Admin]
+      summary: Modifier une question d'un test
+      description: |
+        Modification partielle : la cohérence est vérifiée sur la question
+        **fusionnée**. Une question qui n'appartient pas à CE test donne 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                enonce: { type: string, maxLength: 500 }
+                type: { $ref: "#/components/schemas/QuestionType" }
+                options:
+                  type: array
+                  minItems: 2
+                  maxItems: 6
+                  items: { type: string, maxLength: 300 }
+                bonnesReponses:
+                  type: array
+                  minItems: 1
+                  maxItems: 6
+                  items: { type: integer, minimum: 0 }
+                active: { type: boolean }
+      responses:
+        "200": { description: Test rechargé }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Admin]
+      summary: Retirer une question d'un test
+      description: |
+        Refusé en 422 si le test tombait sous **2 questions** : un test d'une
+        seule question ne note rien, ses seuls scores possibles étant 0 % et
+        100 %. Pour l'enlever, supprimez le test entier.
+      responses:
+        "200": { description: Test rechargé }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/statistiques:
+    get:
+      tags: [Admin]
+      summary: Agrégats du tableau de bord
+      responses:
+        "200": { description: Statistiques }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/entreprises/{id}/statut:
+    patch:
+      tags: [Admin]
+      summary: Valider ou refuser un compte entreprise
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/EntrepriseStatus" }
+                motif: { type: string }
+      responses:
+        "200": { description: Entreprise mise à jour }
+
+  /admin/offres/{id}/moderation:
+    patch:
+      tags: [Admin]
+      summary: Publier, refuser ou désactiver une offre
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/OffreStatus" }
+                motif: { type: string }
+      responses:
+        "200": { description: Offre mise à jour }
+
+  /admin/jeunes/{id}/statut:
+    patch:
+      tags: [Admin]
+      summary: Modifier le statut d'un compte jeune
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/JeuneStatus" }
+      responses:
+        "200": { description: Jeune mis à jour }
+
+  /admin/referentiels/{referentiel}:
+    parameters:
+      - $ref: "#/components/parameters/Referentiel"
+    get:
+      tags: [Admin]
+      summary: Lister les entrées d'un référentiel
+      description: |
+        Paginée, à la différence de la route publique `/referentiels/{referentiel}`
+        qui renvoie tout : celle-ci alimente un écran d'administration, l'autre
+        des `<select>` qui ont besoin de toutes les valeurs proposables.
+
+        Chaque entrée porte `usages`, le nombre d'enregistrements qui la
+        référencent. C'est ce compteur qui conditionne la suppression.
+      parameters:
+        - name: inactives
+          in: query
+          description: Inclure les entrées désactivées.
+          schema: { type: boolean }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Entrées du référentiel (liste paginée)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Success"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/ReferentielEntree" }
+    post:
+      tags: [Admin]
+      summary: Créer une entrée de référentiel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReferentielEntreeInput" }
+      responses:
+        "201": { description: Entrée créée }
+        "409": { description: Une entrée porte déjà ce nom }
+
+  /admin/referentiels/{referentiel}/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Referentiel"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      tags: [Admin]
+      summary: Renommer, réordonner ou (dés)activer une entrée
+      description: |
+        Le renommage se propage automatiquement : les enregistrements pointent sur
+        l'identifiant de l'entrée, pas sur son libellé.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReferentielEntreeInput" }
+      responses:
+        "200": { description: Entrée mise à jour }
+        "409": { description: Une entrée porte déjà ce nom }
+    post:
+      tags: [Admin]
+      summary: Déplacer une entrée d'un cran
+      description: |
+        Le voisin est déterminé côté serveur : il peut se trouver sur une autre
+        page que celle affichée. L'ordre complet du référentiel est réécrit en une
+        transaction, ce qui le renumérote proprement — un échange en deux requêtes
+        pouvait laisser deux entrées au même rang.
+
+        Sans effet (204) si l'entrée est déjà en bout de liste.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direction]
+              properties:
+                direction: { type: string, enum: [haut, bas] }
+      responses:
+        "204": { description: Ordre mis à jour }
+        "404": { description: Entrée introuvable }
+    delete:
+      tags: [Admin]
+      summary: Supprimer une entrée inutilisée
+      description: |
+        Refusé (409) si `usages > 0`. Désactivez l'entrée, ou déplacez d'abord les
+        enregistrements qui la référencent.
+      responses:
+        "204": { description: Entrée supprimée }
+        "409": { description: Entrée utilisée }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Access token obtenu via `/auth/connexion` ou `/auth/refresh`."
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerPage:
+      name: perPage
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Referentiel:
+      name: referentiel
+      in: path
+      required: true
+      description: Référentiel administrable visé.
+      schema:
+        type: string
+        enum: [categories-formation, filieres]
+    CsrfToken:
+      name: x-csrf-token
+      in: header
+      required: true
+      description: Valeur recopiée du cookie `o2w_csrf` (double submit).
+      schema: { type: string }
+
+  responses:
+    Message:
+      description: Message de confirmation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: true }
+              data:
+                type: object
+                properties:
+                  message: { type: string }
+    ValidationError:
+      description: Données invalides
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Authentification requise ou jeton invalide
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Rôle insuffisant ou ressource appartenant à un autre utilisateur
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Conflit (doublon, contrainte métier)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Trop de tentatives
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Success:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: {}
+        meta: { $ref: "#/components/schemas/Meta" }
+
+    QuestionType:
+      type: string
+      description: |
+        Type d'une question, calqué sur ceux d'Udemy :
+        `qcm` une seule bonne réponse ; `choix_multiples` au moins deux ;
+        `vrai_faux` un choix unique à exactement deux options.
+      enum: [qcm, choix_multiples, vrai_faux]
+      default: qcm
+
+    QuizQuestionBase:
+      type: object
+      description: |
+        Forme commune aux questions des deux quiz du projet.
+
+        `bonnesReponses` est un tableau d'index dans `options` — c'est ce qui
+        permet aux trois types de partager un seul modèle. La cohérence
+        (type ↔ options ↔ bonnes réponses) est vérifiée côté serveur, quel que
+        soit le chemin d'écriture : un `choix_multiples` avec une seule bonne
+        réponse, ou un index hors bornes, est refusé en 422.
+      required: [enonce, options, bonnesReponses]
+      properties:
+        enonce: { type: string, maxLength: 500 }
+        type: { $ref: "#/components/schemas/QuestionType" }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 6
+          items: { type: string, maxLength: 300 }
+        bonnesReponses:
+          type: array
+          minItems: 1
+          maxItems: 6
+          description: Index dans `options`. Dédoublonné et trié par le serveur.
+          items: { type: integer, minimum: 0 }
+
+    QuizQuestionInput:
+      description: Question du quiz d'une formation.
+      allOf:
+        - $ref: "#/components/schemas/QuizQuestionBase"
+        - type: object
+          properties:
+            explication:
+              type: string
+              maxLength: 1500
+              description: Montrée au candidat APRÈS sa soumission, dans la correction.
+            chapitre:
+              type: string
+              maxLength: 200
+              description: Chapitre à relire en cas d'erreur.
+
+    QuizQuestionPatch:
+      type: object
+      description: |
+        Modification partielle d'une question de quiz de formation : tous les
+        champs sont facultatifs, au moins un suffit. La cohérence est vérifiée
+        sur la question FUSIONNÉE, pas sur les seuls champs envoyés.
+      minProperties: 1
+      properties:
+        enonce: { type: string, maxLength: 500 }
+        type: { $ref: "#/components/schemas/QuestionType" }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 6
+          items: { type: string, maxLength: 300 }
+        bonnesReponses:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items: { type: integer, minimum: 0 }
+        explication: { type: string, maxLength: 1500 }
+        chapitre: { type: string, maxLength: 200 }
+
+    QuizAnswer:
+      type: object
+      description: |
+        Réponse à une question, quel que soit son type : un tableau d'index dans
+        `options`. Un tableau vide vaut « sans réponse ».
+      required: [questionId]
+      properties:
+        questionId: { type: string, format: uuid }
+        reponses:
+          type: array
+          maxItems: 6
+          default: []
+          items: { type: integer, minimum: 0 }
+
+    ReferentielEntree:
+      type: object
+      description: |
+        Entrée d'un référentiel administrable (catégorie de formation, filière).
+        Même forme quel que soit le référentiel.
+      properties:
+        id: { type: string, format: uuid }
+        nom: { type: string }
+        ordre: { type: integer, description: Position d'affichage }
+        active:
+          type: boolean
+          description: Une entrée désactivée reste rattachée à l'existant mais n'est plus proposée à la saisie.
+        usages:
+          type: integer
+          description: Nombre d'enregistrements rattachés ; la suppression est refusée dès qu'il est non nul.
+        createdAt: { type: string, format: date-time }
+
+    ReferentielEntreeInput:
+      type: object
+      properties:
+        nom: { type: string, minLength: 2, maxLength: 60 }
+        ordre: { type: integer, minimum: 0, maximum: 999 }
+        active: { type: boolean, default: true }
+
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                [
+                  VALIDATION_ERROR,
+                  UNAUTHENTICATED,
+                  INVALID_CREDENTIALS,
+                  EMAIL_NOT_VERIFIED,
+                  ACCOUNT_DISABLED,
+                  TOKEN_EXPIRED,
+                  TOKEN_INVALID,
+                  FORBIDDEN,
+                  NOT_OWNER,
+                  NOT_FOUND,
+                  CONFLICT,
+                  PAYLOAD_TOO_LARGE,
+                  UNSUPPORTED_MEDIA_TYPE,
+                  RATE_LIMITED,
+                  CSRF_ERROR,
+                  INTERNAL_ERROR,
+                ]
+            message: { type: string }
+            details: {}
+
+    Meta:
+      type: object
+      properties:
+        page: { type: integer }
+        perPage: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+
+    Role:
+      type: string
+      enum: [JEUNE, ENTREPRISE, ADMIN]
+
+    JeuneStatus:
+      type: string
+      enum: [inscrit, profil_incomplet, en_attente_test, test_echoue, valide, suspendu]
+
+    EntrepriseStatus:
+      type: string
+      enum: [inscrit, attente_contact, attente_validation, valide, refuse, suspendu]
+
+    OffreStatus:
+      type: string
+      enum: [brouillon, attente_validation, publiee, expiree, desactivee]
+
+    CandidatureStatus:
+      type: string
+      enum: [envoyee, vue, preselectionnee, entretien, acceptee, refusee, retiree]
+
+    EntretienStatus:
+      type: string
+      enum: [en_attente, accepte, refuse, annule]
+
+    User:
+      type: object
+      description: Ne contient jamais le hash du mot de passe.
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        emailVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        profileId: { type: string, format: uuid, nullable: true }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            user: { $ref: "#/components/schemas/User" }
+            accessToken: { type: string }
+            expiresIn: { type: integer, description: "Durée de vie de l'access token, en secondes" }
+            csrfToken: { type: string }
+
+    RegisterJeune:
+      type: object
+      description: |
+        TOUS les champs sont exigés. La filière décide du test de validation
+        servi au candidat (§5.3) et du ciblage des offres ; le niveau et
+        l'établissement pèsent dans le score d'employabilité. Un candidat qui ne
+        trouve pas sa filière peut la créer via `POST /referentiels/filieres`,
+        il n'est donc jamais bloqué par cette obligation.
+      required:
+        [email, password, prenom, nom, telephone, ville, filiereId, niveauEtudes, etablissement]
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          format: password
+          minLength: 12
+          description: "12 caractères minimum, avec majuscule, minuscule et chiffre."
+        prenom: { type: string }
+        nom: { type: string }
+        telephone: { type: string }
+        ville: { type: string }
+        filiereId:
+          type: string
+          format: uuid
+          description: Identifiant de filière (référentiel). Doit exister ET être active.
+        niveauEtudes: { type: string }
+        etablissement: { type: string }
+
+    RegisterEntreprise:
+      type: object
+      required: [email, password, nom, secteur, ville, responsable, telephone]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 12 }
+        nom: { type: string }
+        secteur: { type: string }
+        ville: { type: string }
+        siteWeb: { type: string, format: uri }
+        description: { type: string }
+        responsable: { type: string }
+        emailResponsable: { type: string, format: email }
+        telephone: { type: string }
+
+    Experience:
+      type: object
+      required: [titre, structure, periode, type, description]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        titre: { type: string }
+        structure: { type: string }
+        periode: { type: string }
+        type:
+          type: string
+          enum:
+            [
+              Stage,
+              Emploi,
+              "Projet académique",
+              "Projet personnel",
+              Associatif,
+              "Bénévolat",
+              Freelance,
+            ]
+        description: { type: string }
+        competences: { type: array, items: { type: string } }
+
+    Jeune:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        prenom: { type: string }
+        nom: { type: string }
+        email: { type: string, format: email, description: "Absent de la vue publique" }
+        telephone: { type: string, description: "Absent de la vue publique" }
+        ville: { type: string }
+        photo: { type: string }
+        banniere: { type: string }
+        bio: { type: string }
+        titre: { type: string }
+        niveauEtudes: { type: string }
+        etablissement: { type: string }
+        filiere: { type: string, description: "Libellé — affichage seulement" }
+        filiereId: { type: string, format: uuid, description: "Référence stable au référentiel" }
+        experiences: { type: array, items: { $ref: "#/components/schemas/Experience" } }
+        competences: { type: array, items: { type: string } }
+        langues: { type: array, items: { type: string } }
+        scoreQuiz: { type: integer }
+        status: { $ref: "#/components/schemas/JeuneStatus" }
+        profilCompletion: { type: integer, readOnly: true, description: "Dérivé, jamais stocké" }
+        score:
+          { type: integer, readOnly: true, description: "Score d'employabilité dérivé (0–100)" }
+        formationsValidees: { type: array, items: { type: string, format: uuid } }
+        formationsCompletees: { type: integer }
+        candidatures: { type: integer }
+
+    UpdateJeune:
+      type: object
+      description: Schéma strict — tout champ non listé est rejeté en 422.
+      properties:
+        prenom: { type: string }
+        nom: { type: string }
+        telephone: { type: string }
+        ville: { type: string }
+        bio: { type: string }
+        titre: { type: string }
+        niveauEtudes: { type: string }
+        etablissement: { type: string }
+        filiereId:
+          type: string
+          format: uuid
+          description: Identifiant de filière (référentiel). Doit exister ET être active.
+        specialite: { type: string }
+        anneeEtude: { type: string }
+        diplome: { type: string }
+        competences: { type: array, items: { type: string } }
+        langues: { type: array, items: { type: string } }
+
+    Entreprise:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nom: { type: string }
+        logo: { type: string }
+        secteur: { type: string }
+        ville: { type: string }
+        siteWeb: { type: string }
+        description: { type: string }
+        responsable: { type: string, description: "Absent de la vue publique" }
+        emailResponsable: { type: string, description: "Absent de la vue publique" }
+        telephone: { type: string, description: "Absent de la vue publique" }
+        status: { $ref: "#/components/schemas/EntrepriseStatus" }
+        offresPubliees: { type: integer }
+
+    UpdateEntreprise:
+      type: object
+      properties:
+        nom: { type: string }
+        secteur: { type: string }
+        ville: { type: string }
+        siteWeb: { type: string, format: uri }
+        description: { type: string }
+        responsable: { type: string }
+        emailResponsable: { type: string, format: email }
+        telephone: { type: string }
+
+    Offre:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        titre: { type: string }
+        entreprise:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            nom: { type: string }
+            logo: { type: string }
+            ville: { type: string }
+        type: { type: string }
+        ville: { type: string }
+        mode: { type: string }
+        niveauDemande: { type: string }
+        filiere: { type: string, description: "Libellé — affichage seulement" }
+        filiereId: { type: string, format: uuid, description: "Référence stable au référentiel" }
+        competences: { type: array, items: { type: string } }
+        description: { type: string }
+        dateLimite: { type: string, example: "2026-09-30" }
+        nombrePostes: { type: integer }
+        status: { $ref: "#/components/schemas/OffreStatus" }
+        candidatures: { type: integer, description: "0 en vue publique" }
+        publieeLe: { type: string, example: "2026-08-01" }
+
+    CreateOffre:
+      type: object
+      required: [titre, type, ville, mode, niveauDemande, filiereId, description, dateLimite]
+      properties:
+        titre: { type: string, maxLength: 150 }
+        type: { type: string, enum: [Stage, Emploi, PFE, Alternance, Freelance, Projet] }
+        ville: { type: string }
+        mode: { type: string, enum: ["Présentiel", "Hybride", "À distance"] }
+        niveauDemande: { type: string, enum: [Bac, "Bac+2", "Bac+3", "Bac+5", Doctorat] }
+        filiereId:
+          type: string
+          format: uuid
+          description: Identifiant de filière (référentiel). Doit exister ET être active.
+
+        competences: { type: array, items: { type: string } }
+        description: { type: string, minLength: 20, maxLength: 8000 }
+        dateLimite: { type: string, example: "2026-09-30" }
+        nombrePostes: { type: integer, minimum: 1 }
+        status: { type: string, enum: [brouillon, attente_validation] }
+
+    Candidature:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/CandidatureStatus" }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+        vueLe: { type: string, format: date-time }
+        offre: { type: object }
+        cv:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            filename: { type: string }
+            size: { type: integer }

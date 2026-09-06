@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+
+# Secrets — seul .env.example est versionné
+.env
+.env.*
+!.env.example
+
+# Fichiers uploadés (CV, logos) — jamais dans git
+storage/
+
+*.log
+.DS_Store

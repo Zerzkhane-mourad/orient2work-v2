@@ -1,86 +1,186 @@
-import { Button, Card, CardBody, CardHeader, CardTitle, Icon, Input, PageHeader } from "@/components/ui";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  CardTitle,
+  ErrorBanner,
+  Icon,
+  Input,
+  PageHeader,
+  SuccessBanner,
+} from "@/components/ui";
+import { PasswordField, isPasswordValid } from "@/features/auth/password-field";
+import { useSession } from "@/features/auth/session-provider";
+import { api } from "@/lib/api";
+import { LOGIN_PATH } from "@/lib/config";
+import { useMutation } from "@/lib/api/use-api";
 
 interface AccountSettingsProps {
-  /** Prefill for the identity fields. */
+  /** Nom affiché, fourni par l'espace appelant (profil jeune ou entreprise). */
   name: string;
   email: string;
+  /** Formulaire d'identité propre à l'espace (le profil se modifie ailleurs). */
+  children?: React.ReactNode;
 }
 
-const notifPrefs = [
-  "Nouvelles offres correspondant à mon profil",
-  "Confirmation de candidature",
-  "Demandes et confirmations d'entretien",
-  "Rappels avant entretien",
-];
-
-/** Shared account settings page (profile, security, notifications). */
-export function AccountSettings({ name, email }: AccountSettingsProps) {
+/** Paramètres de compte partagés : identité, sécurité, sessions. */
+export function AccountSettings({ name, email, children }: AccountSettingsProps) {
   return (
     <div className="space-y-6">
-      <PageHeader title="Paramètres" subtitle="Gérez votre compte, votre sécurité et vos notifications." />
+      <PageHeader title="Paramètres" subtitle="Gérez votre compte et votre sécurité." />
 
       <Card>
         <CardHeader>
           <CardTitle>Informations du compte</CardTitle>
         </CardHeader>
         <CardBody className="grid gap-5 sm:grid-cols-2">
-          <Input label="Nom" defaultValue={name} />
-          <Input label="Email" type="email" defaultValue={email} />
-          <Input label="Téléphone" type="tel" placeholder="+212 6 …" />
-          <Input label="Ville" placeholder="Casablanca" />
-          <div className="sm:col-span-2">
-            <Button variant="secondary">Enregistrer les modifications</Button>
-          </div>
+          <Input label="Nom" value={name} readOnly disabled />
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            readOnly
+            disabled
+            hint="L'adresse de connexion n'est pas modifiable."
+          />
+          {children}
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sécurité</CardTitle>
-        </CardHeader>
-        <CardBody className="grid gap-5 sm:grid-cols-2">
-          <Input label="Mot de passe actuel" type="password" placeholder="••••••••" />
-          <div className="hidden sm:block" />
-          <Input label="Nouveau mot de passe" type="password" placeholder="••••••••" />
-          <Input label="Confirmer" type="password" placeholder="••••••••" />
-          <div className="sm:col-span-2">
-            <Button variant="outline">Mettre à jour le mot de passe</Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notifications email</CardTitle>
-        </CardHeader>
-        <CardBody className="space-y-3">
-          {notifPrefs.map((pref) => (
-            <label
-              key={pref}
-              className="flex items-center justify-between gap-4 rounded-lg px-2 py-2 hover:bg-surface-container-low"
-            >
-              <span className="text-sm text-on-surface">{pref}</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 rounded border-outline-variant text-secondary focus:ring-secondary"
-              />
-            </label>
-          ))}
-        </CardBody>
-      </Card>
-
-      <Card className="border-error-container">
-        <CardBody className="flex items-center justify-between gap-4">
-          <div>
-            <p className="flex items-center gap-2 font-bold text-error">
-              <Icon name="warning" className="text-[18px]" /> Supprimer le compte
-            </p>
-            <p className="text-sm text-on-surface-variant">Cette action est irréversible.</p>
-          </div>
-          <Button variant="danger">Supprimer</Button>
-        </CardBody>
-      </Card>
+      <ChangePasswordCard />
+      <SessionsCard />
     </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const router = useRouter();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [done, setDone] = useState(false);
+
+  const { run, pending, error } = useMutation(api.auth.changePassword);
+
+  const canSubmit =
+    currentPassword.length > 0 &&
+    isPasswordValid(newPassword) &&
+    newPassword === confirm &&
+    newPassword !== currentPassword;
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    const result = await run(currentPassword, newPassword);
+    if (!result) return;
+
+    // Le backend révoque toutes les sessions : rester sur place afficherait une
+    // interface qui ne peut plus rien charger.
+    setDone(true);
+    setTimeout(() => router.replace(LOGIN_PATH), 2500);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sécurité</CardTitle>
+      </CardHeader>
+      <CardBody>
+        {done ? (
+          <SuccessBanner message="Mot de passe modifié. Toutes vos sessions ont été fermées — redirection vers la connexion…" />
+        ) : (
+          <form className="grid gap-5 sm:grid-cols-2" onSubmit={handleSubmit} noValidate>
+            {error && (
+              <div className="sm:col-span-2">
+                <ErrorBanner error={error} />
+              </div>
+            )}
+            <Input
+              label="Mot de passe actuel"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              error={error?.issueFor("currentPassword")}
+              required
+            />
+            <div className="hidden sm:block" />
+            <PasswordField
+              label="Nouveau mot de passe"
+              value={newPassword}
+              onChange={setNewPassword}
+              error={error?.issueFor("newPassword")}
+            />
+            <Input
+              label="Confirmer"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              error={
+                confirm.length > 0 && confirm !== newPassword
+                  ? "Les mots de passe ne correspondent pas."
+                  : undefined
+              }
+              required
+            />
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="outline" disabled={pending || !canSubmit}>
+                {pending ? "Mise à jour…" : "Mettre à jour le mot de passe"}
+              </Button>
+              <p className="mt-2 text-xs text-on-surface-variant">
+                Par sécurité, toutes vos sessions seront fermées.
+              </p>
+            </div>
+          </form>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function SessionsCard() {
+  const { logout } = useSession();
+  const router = useRouter();
+  const { run, pending, error } = useMutation(api.auth.logoutAll);
+
+  return (
+    <Card className="border-error-container">
+      <CardHeader>
+        <CardTitle>Sessions actives</CardTitle>
+      </CardHeader>
+      <CardBody className="space-y-3">
+        {error && <ErrorBanner error={error} />}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="flex items-center gap-2 font-semibold text-on-surface">
+              <Icon name="logout" className="text-[18px]" /> Déconnecter tous les appareils
+            </p>
+            <p className="text-sm text-on-surface-variant">
+              Utile si vous vous êtes connecté sur un ordinateur partagé.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            disabled={pending}
+            onClick={() => {
+              void run().then(async () => {
+                await logout();
+                router.replace(LOGIN_PATH);
+              });
+            }}
+          >
+            {pending ? "Fermeture…" : "Tout déconnecter"}
+          </Button>
+        </div>
+      </CardBody>
+    </Card>
   );
 }

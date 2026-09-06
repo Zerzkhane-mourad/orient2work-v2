@@ -19,5 +19,7 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "stitch_orient2work_talent_platform"]
+  // `backend/` a son propre tsconfig (ES modules, types Node) : l'inclure ici
+  // ferait échouer le typecheck du frontend sur du code qui n'est pas le sien.
+  "exclude": ["node_modules", "stitch_orient2work_talent_platform", "backend"]
 }

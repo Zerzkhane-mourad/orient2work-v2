@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Icon, Input, Modal, Select } from "@/components/ui";
-import { FILIERES, NIVEAUX_ETUDES } from "@/lib/constants";
-import type { Filiere } from "@/lib/constants";
+import { Button, Icon, Input, Modal, optionsFromLabels, Select } from "@/components/ui";
+import { NIVEAUX_ETUDES } from "@/lib/constants";
+import { useFilieres } from "@/features/admin/use-referentiel";
 import { EditableCard } from "./editable-card";
 import { useProfile } from "./profile-store";
 
 /** Academic background (§5.2 — informations académiques). */
 export function EducationSection() {
+  const { filieres } = useFilieres();
   const { jeune, update } = useProfile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(jeune);
@@ -20,14 +21,20 @@ export function EducationSection() {
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    const { niveauEtudes, etablissement, filiere, specialite, anneeEtude, diplome } = draft;
-    update({ niveauEtudes, etablissement, filiere, specialite, anneeEtude, diplome });
+    // `filiereId` et non `filiere` : c'est l'identifiant que l'API attend, le
+    // libellé n'étant qu'un affichage susceptible d'être renommé.
+    const { niveauEtudes, etablissement, filiereId, specialite, anneeEtude, diplome } = draft;
+    update({ niveauEtudes, etablissement, filiereId, specialite, anneeEtude, diplome });
     setOpen(false);
   };
 
   return (
     <>
-      <EditableCard title="Formation" actionLabel="Modifier le parcours académique" onAction={openModal}>
+      <EditableCard
+        title="Formation"
+        actionLabel="Modifier le parcours académique"
+        onAction={openModal}
+      >
         <div className="flex gap-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-container text-primary">
             <Icon name="school" className="text-2xl" />
@@ -64,12 +71,9 @@ export function EducationSection() {
             label="Niveau d'études"
             required
             value={draft.niveauEtudes}
-            onChange={(e) => setDraft({ ...draft, niveauEtudes: e.target.value })}
-          >
-            {NIVEAUX_ETUDES.map((n) => (
-              <option key={n}>{n}</option>
-            ))}
-          </Select>
+            onChange={(niveauEtudes) => setDraft({ ...draft, niveauEtudes })}
+            options={optionsFromLabels(NIVEAUX_ETUDES)}
+          />
           <Input
             label="Établissement"
             required
@@ -79,13 +83,10 @@ export function EducationSection() {
           <Select
             label="Filière"
             required
-            value={draft.filiere}
-            onChange={(e) => setDraft({ ...draft, filiere: e.target.value as Filiere })}
-          >
-            {FILIERES.map((f) => (
-              <option key={f}>{f}</option>
-            ))}
-          </Select>
+            value={draft.filiereId ?? ""}
+            onChange={(filiereId) => setDraft({ ...draft, filiereId: filiereId || null })}
+            options={filieres.map((f) => ({ value: f.id, label: f.nom }))}
+          />
           <Input
             label="Spécialité"
             value={draft.specialite ?? ""}

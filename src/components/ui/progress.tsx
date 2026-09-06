@@ -36,7 +36,10 @@ export function ProgressRing({ value, size = 64, strokeWidth = 6, label }: Progr
   const offset = circumference - (clamped / 100) * circumference;
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
       <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -58,7 +61,9 @@ export function ProgressRing({ value, size = 64, strokeWidth = 6, label }: Progr
           className="stroke-secondary-container transition-all duration-700"
         />
       </svg>
-      <span className="absolute text-xs font-bold text-primary">{label ?? `${Math.round(clamped)}%`}</span>
+      <span className="absolute text-xs font-bold text-primary">
+        {label ?? `${Math.round(clamped)}%`}
+      </span>
     </div>
   );
 }

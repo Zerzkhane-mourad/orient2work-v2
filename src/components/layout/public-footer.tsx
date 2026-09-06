@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "./logo";
+import { NewsletterForm } from "@/features/contact/contact-form";
 import { APP_NAME, APP_OWNER } from "@/lib/constants";
 
 const footerColumns = [
@@ -23,7 +24,6 @@ const footerColumns = [
     links: [
       { label: "Centre d'aide", href: "/contact" },
       { label: "Forums entreprises", href: "/a-propos" },
-      { label: "Newsletter", href: "/contact" },
     ],
   },
   {
@@ -56,6 +56,17 @@ export function PublicFooter() {
             </div>
           ))}
         </div>
+        {/* Inscription newsletter — formulaire réel, pas un simple lien. */}
+        <div className="mb-10 flex flex-col gap-4 rounded-xl bg-surface-container p-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h4 className="font-bold text-primary">Restez informé</h4>
+            <p className="text-sm text-on-surface-variant">
+              Nouvelles formations et opportunités, directement dans votre boîte email.
+            </p>
+          </div>
+          <NewsletterForm className="w-full md:max-w-sm" />
+        </div>
+
         <div className="flex flex-col items-center justify-between gap-4 border-t border-outline-variant pt-8 md:flex-row">
           <Logo />
           <p className="text-xs text-on-surface-variant">

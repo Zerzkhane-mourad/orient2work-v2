@@ -16,10 +16,17 @@ const variants: Record<Variant, string> = {
   danger: "bg-error text-on-error hover:brightness-110",
 };
 
+/**
+ * Les hauteurs minimales sont là pour la CIBLE TACTILE, pas pour l'allure : le
+ * remplissage seul donnait 32px en `sm` et 40px en `md`, sous le seuil de 44px
+ * en dessous duquel un bouton se rate au pouce. `sm` reste volontairement plus
+ * bas (36px) : il ne sert que dans les contextes denses — tableaux, cartes —
+ * où il est entouré de marge.
+ */
 const sizes: Record<Size, string> = {
-  sm: "px-4 py-1.5 text-sm",
-  md: "px-6 py-2.5 text-sm",
-  lg: "px-8 py-3.5 text-base",
+  sm: "min-h-9 px-4 py-1.5 text-sm",
+  md: "min-h-11 px-6 py-2.5 text-sm",
+  lg: "min-h-12 px-8 py-3.5 text-base",
 };
 
 interface ButtonBaseProps {
@@ -29,8 +36,7 @@ interface ButtonBaseProps {
 }
 
 export interface ButtonProps
-  extends ButtonBaseProps,
-    React.ButtonHTMLAttributes<HTMLButtonElement> {}
+  extends ButtonBaseProps, React.ButtonHTMLAttributes<HTMLButtonElement> {}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "md", fullWidth, className, ...props }, ref) => (
@@ -43,9 +49,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-export interface ButtonLinkProps
-  extends ButtonBaseProps,
-    React.ComponentProps<typeof Link> {}
+export interface ButtonLinkProps extends ButtonBaseProps, React.ComponentProps<typeof Link> {}
 
 /** A link styled as a button — for navigation actions. */
 export function ButtonLink({

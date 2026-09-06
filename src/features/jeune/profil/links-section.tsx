@@ -1,12 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Icon, Input, Modal, Select } from "@/components/ui";
+import {
+  Button,
+  Icon,
+  type IconName,
+  Input,
+  Modal,
+  optionsFromLabels,
+  Select,
+} from "@/components/ui";
 import { LIEN_TYPES, type LienType } from "@/lib/types";
 import { EditableCard } from "./editable-card";
 import { useProfile } from "./profile-store";
 
-const ICONS: Record<LienType, string> = {
+const ICONS: Record<LienType, IconName> = {
   LinkedIn: "business_center",
   GitHub: "code",
   Portfolio: "link",
@@ -35,7 +43,12 @@ export function LinksSection() {
 
   return (
     <>
-      <EditableCard title="Liens" actionIcon="add" actionLabel="Ajouter un lien" onAction={openModal}>
+      <EditableCard
+        title="Liens"
+        actionIcon="add"
+        actionLabel="Ajouter un lien"
+        onAction={openModal}
+      >
         {jeune.liens.length === 0 ? (
           <p className="text-sm text-on-surface-variant">
             Ajoutez votre LinkedIn, GitHub ou portfolio pour renforcer votre profil.
@@ -86,11 +99,12 @@ export function LinksSection() {
         }
       >
         <form id="link-form" onSubmit={save} className="space-y-5">
-          <Select label="Type" value={type} onChange={(e) => setType(e.target.value as LienType)}>
-            {LIEN_TYPES.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </Select>
+          <Select
+            label="Type"
+            value={type}
+            onChange={(next) => setType(next as LienType)}
+            options={optionsFromLabels(LIEN_TYPES)}
+          />
           <Input
             label="URL"
             type="url"

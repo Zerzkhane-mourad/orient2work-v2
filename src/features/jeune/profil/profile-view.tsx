@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardBody } from "@/components/ui";
+import { Card, CardBody, ErrorBanner, Icon } from "@/components/ui";
 import { IdentitySection } from "./identity-section";
 import { AboutSection } from "./about-section";
 import { EducationSection } from "./education-section";
@@ -8,17 +8,37 @@ import { ExperienceSection } from "./experience-section";
 import { TagListSection } from "./tag-list-section";
 import { LinksSection } from "./links-section";
 import { CompletionCard } from "./completion-card";
+import { ScoreCard } from "../score-card";
 import { useProfile } from "./profile-store";
 
-const SKILL_SUGGESTIONS = ["React", "TypeScript", "Python", "SQL", "Git", "Figma", "Excel", "Communication"];
+const SKILL_SUGGESTIONS = [
+  "React",
+  "TypeScript",
+  "Python",
+  "SQL",
+  "Git",
+  "Figma",
+  "Excel",
+  "Communication",
+];
 const LANGUAGE_SUGGESTIONS = ["Français", "Anglais", "Arabe", "Espagnol", "Allemand"];
 
 /** Editable profile — every section opens its own modal. */
 export function ProfileView() {
-  const { jeune, update } = useProfile();
+  const { jeune, update, saving, saveError, dismissSaveError } = useProfile();
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Un échec d'enregistrement doit être visible : sans ce bandeau, la
+          modification serait annulée en silence par le retour en arrière. */}
+      {saveError && (
+        <div className="lg:col-span-3">
+          <button type="button" onClick={dismissSaveError} className="w-full text-left">
+            <ErrorBanner error={saveError} />
+          </button>
+        </div>
+      )}
+
       <div className="space-y-6 lg:col-span-2">
         <IdentitySection />
         <AboutSection />
@@ -27,6 +47,8 @@ export function ProfileView() {
       </div>
 
       <div className="space-y-6">
+        <ScoreCard />
+
         <CompletionCard />
 
         {jeune.scoreQuiz != null && (
@@ -67,8 +89,18 @@ export function ProfileView() {
 
         <LinksSection />
 
-        <p className="px-2 text-xs text-on-surface-variant">
-          Vos modifications sont enregistrées automatiquement.
+        <p className="flex items-center gap-1.5 px-2 text-xs text-on-surface-variant">
+          {saving ? (
+            <>
+              <Icon name="progress_activity" className="animate-spin text-[14px]" />
+              Enregistrement…
+            </>
+          ) : (
+            <>
+              <Icon name="check_circle" className="text-[14px] text-success" />
+              Vos modifications sont enregistrées automatiquement.
+            </>
+          )}
         </p>
       </div>
     </div>

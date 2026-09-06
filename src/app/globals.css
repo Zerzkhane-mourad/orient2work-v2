@@ -6,98 +6,281 @@
  * Orient2Work color tokens.
  * Single source of truth for the palette — Tailwind maps semantic names onto these.
  * Dark theme overrides live under `.dark`.
+ *
+ * ── Pourquoi des CANAUX et non des couleurs complètes ───────────────────────
+ *
+ * Chaque jeton vaut « r g b » (« 11 31 58 »), et non « #0b1f3a ». Tailwind les
+ * consomme en `rgb(var(--color-x) / <alpha-value>)`, ce qui est la SEULE forme
+ * qui laisse fonctionner les modificateurs d'opacité — `bg-primary/10`,
+ * `hover:bg-primary/5`, `bg-primary/40` pour un voile de modale. Déclarés en
+ * couleurs complètes, ces classes ne produisaient aucune règle : ni erreur de
+ * compilation, ni avertissement, juste un fond absent.
+ *
+ * Conséquence pour tout usage DIRECT en CSS : il faut envelopper le jeton —
+ * `background-color: rgb(var(--color-primary))`, et
+ * `color-mix(in srgb, rgb(var(--color-secondary)) 30%, transparent)`.
+ *
+ * Les jetons `--chart-*` plus bas restent, eux, des couleurs complètes : ils
+ * sont passés tels quels à Recharts et à des `bg-[var(--chart-piste)]`, jamais
+ * à la palette Tailwind.
  */
 :root {
-  --color-background: #f9f9ff;
-  --color-surface: #f9f9ff;
-  --color-surface-dim: #cfdaf1;
-  --color-surface-bright: #f9f9ff;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f0f3ff;
-  --color-surface-container: #e7eeff;
-  --color-surface-container-high: #dee8ff;
-  --color-surface-container-highest: #d8e3fa;
-  --color-surface-variant: #d8e3fa;
-  --color-surface-tint: #4d5f7d;
-  --color-inverse-surface: #263142;
-  --color-inverse-on-surface: #ebf1ff;
+  --color-background: 249 249 255;
+  --color-surface: 249 249 255;
+  --color-surface-dim: 207 218 241;
+  --color-surface-bright: 249 249 255;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-low: 240 243 255;
+  --color-surface-container: 231 238 255;
+  --color-surface-container-high: 222 232 255;
+  --color-surface-container-highest: 216 227 250;
+  --color-surface-variant: 216 227 250;
+  --color-surface-tint: 77 95 125;
+  --color-inverse-surface: 38 49 66;
+  --color-inverse-on-surface: 235 241 255;
 
-  --color-on-background: #111c2c;
-  --color-on-surface: #111c2c;
-  --color-on-surface-variant: #44474d;
+  --color-on-background: 17 28 44;
+  --color-on-surface: 17 28 44;
+  --color-on-surface-variant: 68 71 77;
 
-  --color-outline: #75777e;
-  --color-outline-variant: #c4c6ce;
+  --color-outline: 117 119 126;
+  --color-outline-variant: 196 198 206;
 
   /* Primary — Deep Navy */
-  --color-primary: #0b1f3a;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #0b1f3a;
-  --color-on-primary-container: #7587a7;
-  --color-inverse-primary: #b5c7ea;
-  --color-primary-fixed: #d6e3ff;
-  --color-primary-fixed-dim: #b5c7ea;
-  --color-on-primary-fixed: #071c36;
-  --color-on-primary-fixed-variant: #364764;
+  --color-primary: 11 31 58;
+  --color-on-primary: 255 255 255;
+  --color-primary-container: 11 31 58;
+  --color-on-primary-container: 117 135 167;
+  --color-inverse-primary: 181 199 234;
+  --color-primary-fixed: 214 227 255;
+  --color-primary-fixed-dim: 181 199 234;
+  --color-on-primary-fixed: 7 28 54;
+  --color-on-primary-fixed-variant: 54 71 100;
 
   /* Secondary — Gold */
-  --color-secondary: #735c00;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #fed65b;
-  --color-on-secondary-container: #745c00;
-  --color-secondary-fixed: #ffe088;
-  --color-secondary-fixed-dim: #e9c349;
-  --color-on-secondary-fixed: #241a00;
-  --color-on-secondary-fixed-variant: #574500;
+  --color-secondary: 115 92 0;
+  --color-on-secondary: 255 255 255;
+  --color-secondary-container: 254 214 91;
+  --color-on-secondary-container: 116 92 0;
+  --color-secondary-fixed: 255 224 136;
+  --color-secondary-fixed-dim: 233 195 73;
+  --color-on-secondary-fixed: 36 26 0;
+  --color-on-secondary-fixed-variant: 87 69 0;
 
   /* Tertiary */
-  --color-tertiary: #040608;
-  --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #1c1f21;
-  --color-on-tertiary-container: #858789;
+  --color-tertiary: 4 6 8;
+  --color-on-tertiary: 255 255 255;
+  --color-tertiary-container: 28 31 33;
+  --color-on-tertiary-container: 133 135 137;
 
   /* Semantic (desaturated to match the professional tone) */
-  --color-error: #ba1a1a;
-  --color-on-error: #ffffff;
-  --color-error-container: #ffdad6;
-  --color-on-error-container: #93000a;
-  --color-success: #2e7d55;
-  --color-success-container: #c8f2da;
-  --color-warning: #9a6a00;
-  --color-warning-container: #ffe9b3;
+  --color-error: 186 26 26;
+  --color-on-error: 255 255 255;
+  --color-error-container: 255 218 214;
+  --color-on-error-container: 147 0 10;
+  --color-success: 46 125 85;
+  --color-success-container: 200 242 218;
+  /*
+   * Complète le couple, qui manquait.
+   *
+   * `on-error-container` existait, pas son pendant pour le succès : les écrans
+   * écrivaient donc en `--color-success` sur `--color-success-container`, à
+   * 4,11:1 — sous le minimum AA de 4,5:1 pour du texte courant. Cette valeur
+   * atteint 7,6:1, en ligne avec les 7,2:1 du couple erreur.
+   *
+   * Aucune couleur existante n'est modifiée : c'est un ajout.
+   */
+  --color-on-success-container: 0 82 47;
+  --color-warning: 154 106 0;
+  --color-warning-container: 255 233 179;
+  /*
+   * Pendant manquant du couple « avertissement », ajouté pour la même raison
+   * que `--color-on-success-container` juste au-dessus.
+   *
+   * Les pastilles écrivaient en `--color-warning` (#9a6a00) sur
+   * `--color-warning-container` (#ffe9b3) : 3,96:1, sous le minimum AA de
+   * 4,5:1 — et un libellé de pastille fait 12px, il ne bénéficie pas du seuil
+   * assoupli des grands textes. Cette valeur mesure 8,3:1 sur le même fond.
+   *
+   * Aucune couleur existante n'est modifiée : c'est un ajout.
+   */
+  --color-on-warning-container: 87 63 0;
+
+  /* ── Visualisation de données ─────────────────────────────────────────────
+   *
+   * Recharts REÇOIT des couleurs, il n'en choisit pas : ses teintes par défaut
+   * (violet, vert pomme) n'appartiennent pas à cette marque. Tout ce que les
+   * graphiques peignent sort d'ici, comme le reste de la palette.
+   *
+   * Deux rôles seulement, parce qu'il n'y a que deux métiers à couvrir :
+   *
+   * 1. RAMPE ORDINALE (`--chart-etape-*`) — pour des catégories dont l'ORDRE
+   *    porte du sens : les étapes du parcours candidat. Une seule teinte, dont
+   *    la clarté progresse de façon monotone, pour que l'ordre se lise dans la
+   *    couleur avant d'être lu dans les libellés.
+   *
+   * 2. TEINTE UNIQUE (`--chart-barre`) — pour des catégories SANS ordre :
+   *    formations, statuts de compte, et la courbe de la semaine. Toutes les
+   *    marques prennent la même couleur, parce que la longueur ou la hauteur dit
+   *    déjà la valeur ; teinter chaque barre selon sa taille dépenserait le
+   *    canal identité à répéter ce que la barre montre déjà.
+   *
+   * `--chart-piste` est le fond non rempli d'une jauge : un pas CLAIR DE LA
+   * MÊME RAMPE, jamais un gris neutre — c'est ce qui fait lire « rempli » et
+   * « reste » comme une seule mesure au lieu de deux objets superposés. Il ne
+   * porte aucune valeur, d'où son contraste volontairement faible.
+   *
+   * ── Pourquoi la rampe a été RESATURÉE ──────────────────────────────────────
+   *
+   * La rampe d'origine réutilisait des jetons d'interface (`surface-tint`,
+   * `on-primary-container`…). Ils passaient les contrôles de rampe, mais tous
+   * mesuraient C ≈ 0,05 en OKLCH — sous le plancher de 0,10 en deçà duquel une
+   * teinte cesse de se lire COMME une teinte et vire au gris. D'où des
+   * graphiques ternes : ce n'était pas une impression, c'était mesurable.
+   *
+   * La rampe actuelle garde la TEINTE de la marque (h = 257°, celle de
+   * `--color-primary`) et son pas le plus sombre (#0b1f3a, le navy de la
+   * marque), et monte la chroma des pas intermédiaires à 0,10-0,12. Même
+   * famille, même ancrage, mais la couleur existe enfin.
+   *
+   * Valeurs VALIDÉES, pas choisies à l'œil (contrôles de rampe ordinale :
+   * clarté monotone, écart ΔL ≥ 0,06, extrémité claire ≥ 2:1 sur la surface,
+   * teinte unique) :
+   *   clair  — extrémité #7ea7e0 à 2,47:1 sur blanc, étendue de teinte 1°
+   *   sombre — extrémité #245496 à 2,51:1 sur #0b1119, étendue de teinte 1°
+   */
+  --chart-etape-1: #0b1f3a;
+  --chart-etape-2: #1b4781;
+  --chart-etape-3: #3263a6;
+  --chart-etape-4: #5787cb;
+  --chart-etape-5: #7ea7e0;
+  /* 6,05:1 sur blanc — au-delà du plancher de 3:1 exigé d'une marque. */
+  --chart-barre: #3263a6;
+  --chart-piste: #d5e6fe;
+  /* Filet d'axe et de grille : un pas au-dessus de la surface, jamais un gris
+     franc — une grille qui se voit autant que les données les concurrence. */
+  --chart-grille: #cedef4;
 }
 
 .dark {
-  --color-background: #101722;
-  --color-surface: #101722;
-  --color-surface-dim: #101722;
-  --color-surface-bright: #37414f;
-  --color-surface-container-lowest: #0b1119;
-  --color-surface-container-low: #19212c;
-  --color-surface-container: #1d2530;
-  --color-surface-container-high: #27303b;
-  --color-surface-container-highest: #323b47;
-  --color-surface-variant: #44474d;
-  --color-inverse-surface: #e3e2e6;
-  --color-inverse-on-surface: #2f3033;
+  --color-background: 16 23 34;
+  --color-surface: 16 23 34;
+  --color-surface-dim: 16 23 34;
+  --color-surface-bright: 55 65 79;
+  --color-surface-container-lowest: 11 17 25;
+  --color-surface-container-low: 25 33 44;
+  --color-surface-container: 29 37 48;
+  --color-surface-container-high: 39 48 59;
+  --color-surface-container-highest: 50 59 71;
+  --color-surface-variant: 68 71 77;
+  --color-inverse-surface: 227 226 230;
+  --color-inverse-on-surface: 47 48 51;
 
-  --color-on-background: #e2e2e9;
-  --color-on-surface: #e2e2e9;
-  --color-on-surface-variant: #c4c6ce;
+  --color-on-background: 226 226 233;
+  --color-on-surface: 226 226 233;
+  --color-on-surface-variant: 196 198 206;
 
-  --color-outline: #8e9099;
-  --color-outline-variant: #44474d;
+  --color-outline: 142 144 153;
+  --color-outline-variant: 68 71 77;
 
-  --color-primary: #b5c7ea;
-  --color-on-primary: #071c36;
-  --color-primary-container: #0b1f3a;
-  --color-on-primary-container: #d6e3ff;
+  --color-primary: 181 199 234;
+  --color-on-primary: 7 28 54;
+  --color-primary-container: 11 31 58;
+  --color-on-primary-container: 214 227 255;
+
+  /* ── Graphiques en thème sombre ───────────────────────────────────────────
+   *
+   * Ce bloc MANQUAIT : les jetons `--chart-*` n'étaient définis que dans
+   * `:root`, et les graphiques auraient donc gardé leurs valeurs claires sur
+   * une carte sombre — une piste de jauge #d5e6fe y serait un bloc presque
+   * blanc, et le pas le plus sombre de la rampe (#0b1f3a) disparaîtrait
+   * purement et simplement dans le fond.
+   *
+   * Ce ne sont PAS les valeurs claires inversées : la rampe est re-choisie
+   * dans la même teinte (h = 257°) et revalidée contre la surface sombre
+   * (#0b1119). Son sens de lecture s'inverse en revanche — sur fond sombre,
+   * c'est le pas le plus CLAIR qui domine, donc `etape-1`, la première étape
+   * du parcours, prend le pas le plus clair et non le plus foncé.
+   *
+   * Dormant tant qu'aucun sélecteur de thème ne pose la classe `dark` ; le
+   * jour où il existera, les graphiques suivront sans retouche.
+   */
+  --chart-etape-1: #a5c6f5;
+  --chart-etape-2: #7faae6;
+  --chart-etape-3: #5b8dd4;
+  --chart-etape-4: #3c71bc;
+  --chart-etape-5: #245496;
+  /* 5,60:1 sur la carte sombre — lisible sans éblouir. */
+  --chart-barre: #5b8dd4;
+  --chart-piste: #20334f;
+  --chart-grille: #1e293a;
 }
 
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+
+    /*
+     * Dégagement sous l'en-tête COLLANT.
+     *
+     * Sans lui, tout ce qu'on amène à l'écran — ancre `#quiz`, retour en tête de
+     * liste après un changement de page — se range EXACTEMENT en haut de la
+     * fenêtre, c'est-à-dire sous la barre fixe, invisible.
+     *
+     * Écrit ici une fois plutôt qu'en `scroll-mt-24` sur chaque conteneur : la
+     * classe était recopiée dans vingt-deux fichiers, ne protégeait que les
+     * éléments qui y pensaient, et laissait toutes les ancres non traitées.
+     *
+     * 5rem couvre le plus haut des deux en-têtes (`AppShell`, 4rem) et laisse
+     * une marge de respiration ; l'Espace Jeune, à 3,5rem, gagne 8px de plus —
+     * imperceptible.
+     */
+    scroll-padding-top: 5rem;
+  }
+
+  /*
+   * Barre de défilement discrète, aux couleurs de l'interface.
+   *
+   * Celle du système est large et grise sous Windows : sur une palette navy et
+   * or, elle traverse chaque écran comme un corps étranger. Elle reste bien
+   * VISIBLE — la masquer priverait du seul repère de position dans une longue
+   * page, et l'on ne masque une barre que là où le débordement est signalé
+   * autrement (voir `.scrollbar-none` et `ScrollRow`).
+   */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-outline-variant)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-outline-variant));
+    border-radius: 9999px;
+    /*
+     * Bordure transparente + `content-box` : c'est ce qui amincit le curseur
+     * sans réduire la ZONE CLIQUABLE. Une barre de 6px serait jolie et presque
+     * impossible à saisir à la souris.
+     */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--color-outline));
+  }
+
+  /* Le coin entre deux barres, sinon rendu en gris système. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
   body {
     @apply bg-background text-on-background font-body;
@@ -105,5 +288,471 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
   }
+
+  /*
+   * Mouvement réduit : réglage système, pas une préférence esthétique.
+   *
+   * Certains utilisateurs souffrent de troubles vestibulaires ; les animations
+   * leur donnent des vertiges. Tout est ramené à une durée imperceptible plutôt
+   * que supprimé, pour que les transitions d'état restent déclenchées.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
+
+@layer utilities {
+  /*
+   * Barre de défilement masquée, défilement conservé.
+   *
+   * Réservé aux rangées horizontales dont le débordement est signalé AUTREMENT
+   * — dégradés sur les bords et flèches, voir `ScrollRow`. Masquer la barre
+   * sans rien mettre à la place rendrait le contenu hors-champ invisible.
+   */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  /*
+   * Encoches et barre gestuelle iOS.
+   *
+   * Une barre d'onglets collée en bas passe SOUS l'indicateur d'accueil des
+   * iPhone récents : le dernier onglet devient à moitié inatteignable. Ces
+   * utilitaires réservent la hauteur que le système déclare, et valent 0 partout
+   * ailleurs — `env()` retombe sur sa valeur de repli hors iOS.
+   *
+   * Exige `viewport-fit=cover` (déclaré dans `app/layout.tsx`) : sans lui, iOS
+   * ne renseigne jamais ces variables.
+   */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /** Hauteur de la barre d'onglets + encoche : dégage le bas des pages. */
+  .pb-nav-mobile {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@layer components {
+  /*
+   * Apparition en cascade d'une liste ou d'une grille.
+   *
+   * ── Ce que le mouvement DIT ─────────────────────────────────────────────
+   *
+   * Les tableaux de bord remplacent des squelettes par du contenu. Tout
+   * apparaître d'un bloc ne laisse pas voir CE QUI a changé ; un décalage de
+   * 45 ms par élément donne un ordre de lecture — première carte, deuxième,
+   * troisième — qui est justement celui dans lequel le contenu est classé.
+   *
+   * Ce n'est donc pas un ornement : c'est la hiérarchie de la page, rejouée
+   * une fois. D'où une durée courte (260 ms) et une amplitude minime (4px,
+   * héritée de `fade-in`) — au-delà, on regarde l'animation au lieu du
+   * contenu.
+   *
+   * ── Le retard est PLAFONNÉ ──────────────────────────────────────────────
+   *
+   * Sans plafond, la douzième carte d'une grille attendrait une demi-seconde
+   * avant d'exister : l'effet cesse d'être une cascade et devient une
+   * lenteur. Au-delà du sixième rang, tout part ensemble.
+   *
+   * `backwards` maintient l'état initial PENDANT le retard ; sans lui,
+   * l'élément s'affiche à sa place définitive puis disparaît pour s'animer.
+   *
+   * Mouvement réduit : la règle globale ramène déjà la durée à 0,01 ms, mais
+   * PAS le retard — un élément resterait invisible un quart de seconde sans
+   * raison. Il est donc annulé ici explicitement.
+   */
+  .apparition {
+    animation: fade-in 260ms cubic-bezier(0.4, 0, 0.2, 1) backwards;
+    animation-delay: calc(min(var(--rang, 0), 6) * 45ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .apparition {
+      animation-delay: 0ms;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * Image insérée dans un cours.
+   *
+   * `max-width: 100%` et hauteur automatique : une capture de 1600px de large
+   * déborderait sinon de la colonne de lecture sur mobile, et emporterait la
+   * page en défilement horizontal.
+   */
+  .rt-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.5rem auto;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(var(--color-outline-variant));
+  }
+}
+
+@layer components {
+  /*
+   * Les bandes sombres sont des APLATS : pas de motif, pas de filigrane.
+   *
+   * Une trame décorative posée derrière le texte se remarque avant lui — c'est
+   * exactement ce qu'on ne veut pas d'un fond. La hiérarchie est portée par la
+   * composition et par les dégradés ci-dessous, pas par de la matière.
+   */
+
+  /*
+   * Chiffre monumental.
+   *
+   * `clamp` plutôt que des paliers de points d'arrêt : le corps suit la largeur
+   * de façon continue, sans marche d'escalier entre 767 et 768 px. La borne
+   * basse garantit qu'il reste imposant sur un téléphone.
+   */
+  .chiffre-monumental {
+    font-size: clamp(4.5rem, 18vw, 11rem);
+    line-height: 0.82;
+    letter-spacing: -0.04em;
+    font-weight: 800;
+  }
+
+  /*
+   * Lien de navigation à filet animé.
+   *
+   * ── Pourquoi `scaleX` et non `width` ────────────────────────────────────
+   *
+   * Animer la largeur force le navigateur à refaire la mise en page à chaque
+   * image. Une transformation, elle, est prise en charge par le compositeur :
+   * elle ne touche ni la mise en page ni le dessin. C'est la différence entre
+   * un filet fluide et un filet qui saccade dès que la page est chargée.
+   *
+   * ── Le détail qui fait la différence : l'origine bascule ─────────────────
+   *
+   * `transform-origin` vaut `right` au repos et `left` au survol. À l'entrée,
+   * le filet naît donc à GAUCHE et grandit vers la droite ; à la sortie,
+   * l'origine redevient `right` instantanément pendant que l'échelle retombe,
+   * et le filet se retire vers la DROITE.
+   *
+   * Le trait donne ainsi l'impression de TRAVERSER le mot, au lieu de
+   * rejouer son apparition à l'envers. C'est ce que font les barres de
+   * navigation les mieux finies, et cela tient en une ligne.
+   *
+   * ── Position ────────────────────────────────────────────────────────────
+   *
+   * Le pseudo-élément est porté par un `<span>` qui n'entoure QUE le libellé,
+   * jamais le lien entier : le filet épouse donc la largeur du mot et reste
+   * juste quel que soit le remplissage horizontal, qui change entre `lg` et
+   * `xl`.
+   *
+   * Rien à prévoir pour « mouvement réduit » : la règle globale plus haut
+   * couvre `*::after` et ramène la durée à 0,01 ms — le filet apparaît alors
+   * d'un coup, sans disparaître.
+   */
+  .lien-nav-texte {
+    position: relative;
+  }
+
+  .lien-nav-texte::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.375rem;
+    height: 2px;
+    border-radius: 1px;
+    background-color: rgb(var(--color-secondary));
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .lien-nav:hover .lien-nav-texte::after,
+  .lien-nav:focus-visible .lien-nav-texte::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+
+  /*
+   * Page courante : filet déployé en permanence.
+   *
+   * Adossé à `aria-current`, et non à une classe décorative : l'information
+   * visuelle et l'information annoncée aux lecteurs d'écran ne peuvent alors
+   * plus diverger — il n'y a qu'une seule source.
+   */
+  .lien-nav[aria-current="page"] .lien-nav-texte::after {
+    transform: scaleX(1);
+  }
+
+  /*
+   * Champ lumineux du héros.
+   *
+   * ── Le problème ─────────────────────────────────────────────────────────
+   *
+   * Une fois le motif retiré, le panneau du héros n'était plus qu'un aplat de
+   * navy : rien ne distinguait le haut, où vit le titre, du bas, où se posent
+   * les deux portes. Les cartes blanches flottaient sur le même plan que le
+   * texte.
+   *
+   * ── Ce qui remplace le motif : de la LUMIÈRE, pas de la matière ─────────
+   *
+   * Trois couches, dans l'ordre de peinture (la première est au-dessus) :
+   *
+   *  1. un assombrissement progressif vers le bas, qui densifie le sol sous
+   *     les portes et les détache du fond ;
+   *  2. une lueur or diffuse derrière le titre — la couleur d'accent de la
+   *     marque, employée comme source lumineuse plutôt que comme aplat ;
+   *  3. une lumière froide au coin haut-gauche, qui empêche la lueur or de
+   *     paraître centrée et symétrique.
+   *
+   * Aucun ornement, aucune forme reconnaissable : le fond ne se regarde pas,
+   * il hiérarchise.
+   *
+   * ── Contraste, mesuré et non supposé ────────────────────────────────────
+   *
+   * Les opacités ne sont pas choisies à l'œil. Au point le plus clair — là où
+   * les deux lueurs se superposent — le fond monte à rgb(54, 67, 77), ce qui
+   * donne encore 10,2:1 pour le blanc, 5,9:1 pour le texte à 70 % et 6,0:1
+   * pour le mot d'accent or. Le minimum AA est de 4,5:1.
+   *
+   * En bas, l'assombrissement joue dans l'autre sens : l'or des appels à
+   * l'action y atteint 10,6:1, contre 9,7:1 sur l'aplat d'origine. Le fond
+   * améliore la lisibilité des boutons au lieu de la dégrader.
+   *
+   * Tout est en CSS : le héros reste un Server Component, sans un octet de
+   * JavaScript ajouté.
+   */
+  .champ-heros {
+    /*
+     * Abscisse de la lueur, paramétrable.
+     *
+     * Sur un titre centré (l'accueil) elle reste au milieu ; sur un titre
+     * aligné à gauche (« entreprises ») elle doit suivre le texte, sinon elle
+     * éclaire la gouttière entre les deux colonnes. Une variable plutôt qu'un
+     * second jeu de dégradés : les opacités, elles, sont mesurées et ne
+     * doivent surtout pas être dupliquées.
+     */
+    --lueur-x: 50%;
+    background-color: rgb(var(--color-primary));
+    background-image:
+      linear-gradient(180deg, rgba(4, 12, 24, 0) 46%, rgba(4, 12, 24, 0.45) 100%),
+      /*
+       * Centre à 14 % de la hauteur, et non au-dessus du panneau.
+       *
+       * Posée à `50% -8%`, la lueur avait son point le plus vif HORS CADRE :
+       * le panneau n'en recevait que la retombée, et la partie la plus claire
+       * tombait sur l'arête haute — là où il n'y a rien à éclairer. À 14 %,
+       * le maximum coïncide avec la première ligne du titre.
+       */
+      radial-gradient(
+        ellipse 85% 55% at var(--lueur-x) 14%,
+        color-mix(in srgb, rgb(var(--color-secondary-fixed-dim)) 13%, transparent),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse 55% 48% at 6% 2%,
+        color-mix(in srgb, rgb(var(--color-inverse-primary)) 10%, transparent),
+        transparent 60%
+      );
+    /*
+     * Arête haute soulignée d'un filet clair : c'est ce qui fait lire le
+     * panneau comme un objet posé sur la page plutôt que comme un trou.
+     */
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+
+  /* Titre aligné à gauche : la lueur se déplace avec lui. */
+  .champ-heros-gauche {
+    --lueur-x: 24%;
+  }
+}
+
+@layer components {
+  /*
+   * Champ dégradé des sections « moment fort ».
+   *
+   * La référence pose ses témoignages et son appel final sur un dégradé chaud
+   * orange-rouge. La construction est reprise, pas la teinte : ici deux
+   * radiales navy et or se recouvrent sur un fond profond.
+   *
+   * Des radiales décentrées plutôt qu'un dégradé linéaire : un linéaire se lit
+   * comme un fond de bannière, deux radiales qui se chevauchent produisent une
+   * lumière, avec un centre et des bords. C'est ce qui donne la profondeur.
+   */
+  .champ-degrade {
+    background-color: rgb(var(--color-primary));
+    background-image:
+      radial-gradient(
+        ellipse 80% 60% at 20% 0%,
+        color-mix(in srgb, rgb(var(--color-secondary-fixed-dim)) 32%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 70% 70% at 85% 100%,
+        color-mix(in srgb, rgb(var(--color-inverse-primary)) 28%, transparent),
+        transparent 65%
+      );
+  }
+
+  /*
+   * Même construction, en clair, pour les blocs posés sur fond de page.
+   *
+   * Les deux teintes restent très diluées : au-delà, le texte noir perdrait le
+   * contraste que la version sombre lui garantit en blanc.
+   */
+  .champ-degrade-clair {
+    background-color: rgb(var(--color-surface-container-low));
+    background-image:
+      radial-gradient(
+        ellipse 70% 60% at 15% 0%,
+        color-mix(in srgb, rgb(var(--color-secondary-container)) 55%, transparent),
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse 60% 60% at 90% 100%,
+        color-mix(in srgb, rgb(var(--color-primary-fixed)) 60%, transparent),
+        transparent 60%
+      );
+  }
+}
+
+@layer components {
+  /*
+   * ── L'or n'existait que sur les fonds sombres ────────────────────────────
+   *
+   * Le héros, la bande de confiance et l'appel final portent l'accent de la
+   * marque. Entre les deux, la page traverse quatre sections claires — chiffres,
+   * catégories, parcours, questions — où il n'apparaît PAS une seule fois :
+   * navy sur blanc bleuté, du début à la fin. Une identité qui ne se voit que
+   * lorsque le fond est noir n'est pas une identité, c'est un éclairage.
+   *
+   * Les trois classes ci-dessous réintroduisent l'or dans la moitié claire, en
+   * APLAT et jamais en texte : sur du blanc, un or lisible vire au brun (c'est
+   * ce qu'est `--color-secondary`, #735c00). L'or de la marque ne tient sa
+   * chaleur qu'employé comme surface, avec du navy écrit dessus.
+   */
+
+  /*
+   * Pastille d'icône, ton chaud.
+   *
+   * Une icône navy posée à même la carte se confond avec le libellé qu'elle
+   * accompagne. Sur un fond crème, elle devient un objet — et c'est le seul
+   * endroit des tuiles où la couleur peut entrer sans toucher au texte.
+   *
+   * Bronze (#574500) sur crème : 8,4:1. Bien au-delà des 3:1 exigés d'une
+   * icône porteuse de sens.
+   */
+  .pastille-or {
+    background-color: color-mix(
+      in srgb,
+      rgb(var(--color-secondary-container)) 30%,
+      rgb(var(--color-surface-container-lowest))
+    );
+    color: rgb(var(--color-on-secondary-fixed-variant));
+    transition:
+      background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /*
+   * Au survol, la pastille s'inverse : fond navy, icône or.
+   *
+   * `:focus-visible` est traité au même titre que `:hover`, et non en second :
+   * qui navigue au clavier doit recevoir exactement le même retour visuel que
+   * qui pointe à la souris.
+   */
+  .group:hover .pastille-or,
+  .group:focus-visible .pastille-or {
+    background-color: rgb(var(--color-primary));
+    color: rgb(var(--color-secondary-fixed-dim));
+  }
+
+  /*
+   * Trait de liaison de la frise, qui s'éteint vers le bas.
+   *
+   * Historiquement écrit ici parce que `from-primary/35` ne produisait AUCUNE
+   * règle : les jetons étaient déclarés en couleurs complètes, que Tailwind ne
+   * sait pas décomposer pour y appliquer une opacité. Ils portent désormais des
+   * canaux (« 11 31 58 ») et un `<alpha-value>`, si bien que le modificateur
+   * fonctionne partout — cette classe reste par simple équivalence, et les
+   * nouvelles teintes intermédiaires n'ont plus à passer par `color-mix`.
+   */
+  .filet-frise {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, rgb(var(--color-primary)) 35%, transparent),
+      rgb(var(--color-outline-variant))
+    );
+  }
+
+  /*
+   * Panneau clair, versant entreprise.
+   *
+   * Le héros distingue déjà les deux publics par la couleur — navy plein pour
+   * la porte du jeune, or pour l'appel entreprise. Plus bas, les deux parcours
+   * retombaient sur le même bleu de surface : la distinction posée en haut de
+   * page se perdait exactement là où elle est EXPLIQUÉE.
+   *
+   * Le lavis est très dilué et ne coûte rien en lisibilité : le navy y garde
+   * 15,2:1 (contre 14,8:1 sur le bleu d'origine) et le texte secondaire 8,6:1.
+   */
+  .panneau-entreprise {
+    background-color: color-mix(
+      in srgb,
+      rgb(var(--color-secondary-container)) 22%,
+      rgb(var(--color-surface-container-lowest))
+    );
+    border: 1px solid color-mix(in srgb, rgb(var(--color-secondary-fixed-dim)) 45%, transparent);
+  }
+}
+
+@layer components {
+  /*
+   * Bande sombre éclairée.
+   *
+   * `bg-inverse-surface` seul donne un APLAT. Sur toute la largeur de l'écran,
+   * un rectangle d'une seule valeur écrase ce qu'on y pose et coupe la page
+   * comme un bandeau. Le héros avait été traité (`champ-heros`) ; les deux
+   * autres blocs sombres — la bande de confiance et la carte du seuil — étaient
+   * restés plats, et c'est là que se trouve l'argument central de la page.
+   *
+   * Même construction qu'en héros, à intensité réduite : une lueur or sourde
+   * sous le point d'accroche (le chiffre monumental, l'anneau), une lumière
+   * froide au coin opposé pour désaxer l'ensemble. L'abscisse de la lueur est
+   * paramétrable, ce point d'accroche n'étant pas au même endroit partout.
+   *
+   * Contraste, mesuré : au point le plus clair le fond monte à rgb(64, 70, 74),
+   * soit 8,3:1 pour du blanc plein et 5,5:1 pour du blanc à 65 %. Le minimum AA
+   * est de 4,5:1 — les opacités sont choisies pour cette marge, pas à l'œil.
+   */
+  .champ-sombre {
+    --lueur-sombre-x: 22%;
+    background-color: rgb(var(--color-inverse-surface));
+    background-image:
+      radial-gradient(
+        ellipse 55% 95% at var(--lueur-sombre-x) 45%,
+        color-mix(in srgb, rgb(var(--color-secondary-fixed-dim)) 11%, transparent),
+        transparent 68%
+      ),
+      radial-gradient(
+        ellipse 65% 75% at 98% 4%,
+        color-mix(in srgb, rgb(var(--color-inverse-primary)) 9%, transparent),
+        transparent 62%
+      );
+    /* Arête haute soulignée : le bloc se lit comme posé, non comme découpé. */
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  }
+}

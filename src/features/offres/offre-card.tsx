@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Badge, Card, CardBody, Chip, Icon } from "@/components/ui";
+import type { ApiOffre } from "@/lib/api/types";
 import { formatDate } from "@/lib/utils";
-import type { Offre } from "@/lib/types";
 
 interface OffreCardProps {
-  offre: Offre;
+  offre: ApiOffre;
   /** Base path for the detail link (differs by space). */
   href?: string;
 }

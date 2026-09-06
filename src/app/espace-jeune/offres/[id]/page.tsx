@@ -1,14 +1,37 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import { use } from "react";
 import Link from "next/link";
-import { Badge, Card, CardBody, Chip, Icon } from "@/components/ui";
+import { Badge, Card, CardBody, Chip, ErrorState, Icon, LoadingState } from "@/components/ui";
 import { OffreActions } from "@/features/offres/offre-actions";
-import { offres } from "@/lib/mock-data";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/api/use-api";
 import { formatDate } from "@/lib/utils";
 
-export default async function OffreDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const offre = offres.find((o) => o.id === id);
-  if (!offre) notFound();
+export default function OffreDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+
+  const { data: offre, loading, error, refetch } = useApi(() => api.offres.byId(id), [id]);
+
+  // L'API n'expose pas « ai-je déjà candidaté à cette offre ? » : on interroge
+  // mes candidatures SUR CETTE OFFRE. Le filtre est appliqué côté serveur — le
+  // déduire d'une liste tronquée à 100 donnerait une réponse fausse au-delà.
+  const { data: candidatures, refetch: refetchCandidatures } = useApi(
+    () => api.candidatures.mine({ offreId: id, perPage: 1 }),
+    [id],
+  );
+
+  if (loading) return <LoadingState label="Chargement de l'offre…" />;
+
+  if (error || !offre) {
+    return (
+      <div className="mx-auto max-w-2xl py-10">
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
+
+  const existante = candidatures?.items[0] ?? null;
 
   const facts = [
     { icon: "category", label: "Type", value: offre.type },
@@ -17,7 +40,7 @@ export default async function OffreDetailPage({ params }: { params: Promise<{ id
     { icon: "school", label: "Niveau", value: offre.niveauDemande },
     { icon: "workspace_premium", label: "Filière", value: offre.filiere },
     { icon: "groups", label: "Postes", value: `${offre.nombrePostes}` },
-  ];
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -47,7 +70,8 @@ export default async function OffreDetailPage({ params }: { params: Promise<{ id
                 <Badge tone="gold">{offre.type}</Badge>
               </div>
               <p className="flex items-center gap-1 text-sm text-on-surface-variant">
-                <Icon name="schedule" className="text-[16px]" /> Date limite : {formatDate(offre.dateLimite)}
+                <Icon name="schedule" className="text-[16px]" /> Date limite :{" "}
+                {formatDate(offre.dateLimite)}
               </p>
             </CardBody>
           </Card>
@@ -69,21 +93,23 @@ export default async function OffreDetailPage({ params }: { params: Promise<{ id
           <Card>
             <CardBody className="space-y-4">
               <h2 className="font-headline text-lg font-bold text-primary">Description du poste</h2>
-              <p className="text-on-surface">{offre.description}</p>
-              <div>
-                <h3 className="mb-2 font-semibold text-primary">Compétences requises</h3>
-                <div className="flex flex-wrap gap-2">
-                  {offre.competences.map((c) => (
-                    <Chip key={c}>{c}</Chip>
-                  ))}
+              <p className="whitespace-pre-line text-on-surface">{offre.description}</p>
+              {offre.competences.length > 0 && (
+                <div>
+                  <h3 className="mb-2 font-semibold text-primary">Compétences requises</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {offre.competences.map((c) => (
+                      <Chip key={c}>{c}</Chip>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </CardBody>
           </Card>
         </div>
 
         <div className="space-y-6">
-          <OffreActions />
+          <OffreActions offreId={offre.id} existante={existante} onApplied={refetchCandidatures} />
         </div>
       </div>
     </div>

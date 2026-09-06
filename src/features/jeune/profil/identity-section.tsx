@@ -1,19 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar, Button, Card, Icon, ImageUpload, Input, Modal, StatusBadge } from "@/components/ui";
+import {
+  Avatar,
+  Button,
+  Card,
+  Icon,
+  ImageUpload,
+  Input,
+  Modal,
+  ProtectedImage,
+  StatusBadge,
+} from "@/components/ui";
 import { useProfile } from "./profile-store";
 
 type Editing = "none" | "identity" | "photo" | "banniere";
 
 /** Profile header: cover banner, avatar, identity and contact details. */
 export function IdentitySection() {
-  const { jeune, update } = useProfile();
+  const { jeune, update, uploadPhoto, uploadBanniere } = useProfile();
   const [editing, setEditing] = useState<Editing>("none");
   const [draft, setDraft] = useState(jeune);
   // Image drafts so "Annuler" genuinely discards the pick.
   const [photoDraft, setPhotoDraft] = useState<string | undefined>(jeune.photo);
   const [banniereDraft, setBanniereDraft] = useState<string | undefined>(jeune.banniere);
+  // Fichiers d'origine : c'est ce que l'API attend, pas la data URL d'aperçu.
+  const [photoFile, setPhotoFile] = useState<File | undefined>();
+  const [banniereFile, setBanniereFile] = useState<File | undefined>();
 
   const close = () => setEditing("none");
 
@@ -23,17 +36,21 @@ export function IdentitySection() {
   };
   const openPhoto = () => {
     setPhotoDraft(jeune.photo);
+    setPhotoFile(undefined);
     setEditing("photo");
   };
   const openBanniere = () => {
     setBanniereDraft(jeune.banniere);
+    setBanniereFile(undefined);
     setEditing("banniere");
   };
 
   const saveIdentity = (e: React.FormEvent) => {
     e.preventDefault();
-    const { prenom, nom, titre, ville, email, telephone } = draft;
-    update({ prenom, nom, titre, ville, email, telephone });
+    // `email` est volontairement absent : l'adresse appartient au compte, pas
+    // au profil, et l'API ne permet pas de la modifier ici.
+    const { prenom, nom, titre, ville, telephone } = draft;
+    void update({ prenom, nom, titre, ville, telephone });
     close();
   };
 
@@ -42,13 +59,14 @@ export function IdentitySection() {
       <Card className="overflow-hidden">
         {/* Cover banner */}
         <div className="group relative h-32 sm:h-40">
-          {jeune.banniere ? (
-            // Data URL from the device — next/image adds no value here.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={jeune.banniere} alt="Bannière du profil" className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-r from-primary via-primary-container to-surface-tint" />
-          )}
+          <ProtectedImage
+            src={jeune.banniere}
+            alt="Bannière du profil"
+            className="h-full w-full object-cover"
+            fallback={
+              <div className="h-full w-full bg-gradient-to-r from-inverse-surface via-primary to-surface-tint" />
+            }
+          />
           <button
             type="button"
             onClick={openBanniere}
@@ -150,9 +168,10 @@ export function IdentitySection() {
           <Input
             label="Email"
             type="email"
-            required
             value={draft.email}
-            onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+            hint="L'adresse de connexion ne se modifie pas ici."
+            disabled
+            readOnly
           />
           <Input
             label="Téléphone"
@@ -185,8 +204,9 @@ export function IdentitySection() {
             </Button>
             <Button
               variant="secondary"
+              disabled={!photoFile}
               onClick={() => {
-                update({ photo: photoDraft });
+                if (photoFile) void uploadPhoto(photoFile);
                 close();
               }}
             >
@@ -198,6 +218,7 @@ export function IdentitySection() {
         <ImageUpload
           value={photoDraft}
           onChange={setPhotoDraft}
+          onFile={setPhotoFile}
           shape="circle"
           maxWidth={512}
           maxHeight={512}
@@ -219,8 +240,9 @@ export function IdentitySection() {
             </Button>
             <Button
               variant="secondary"
+              disabled={!banniereFile}
               onClick={() => {
-                update({ banniere: banniereDraft });
+                if (banniereFile) void uploadBanniere(banniereFile);
                 close();
               }}
             >
@@ -232,6 +254,7 @@ export function IdentitySection() {
         <ImageUpload
           value={banniereDraft}
           onChange={setBanniereDraft}
+          onFile={setBanniereFile}
           shape="wide"
           maxWidth={1600}
           maxHeight={500}

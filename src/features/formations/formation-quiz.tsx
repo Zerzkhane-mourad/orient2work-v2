@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Button, ButtonLink, Card, CardBody, Icon, ProgressRing } from "@/components/ui";
-import type { FormationQuiz as Quiz } from "@/lib/types";
+import { useState } from "react";
+import {
+  Button,
+  Card,
+  CardBody,
+  ErrorBanner,
+  Icon,
+  type IconName,
+  ProgressRing,
+} from "@/components/ui";
+import { useProfileOptional } from "@/features/jeune/profil/profile-store";
+import { api } from "@/lib/api";
+import type { ApiFormation, ApiFormationQuizResult } from "@/lib/api/types";
+import { useMutation } from "@/lib/api/use-api";
+import { POINTS_FORMATION_VALIDEE } from "@/lib/score";
 import { cn } from "@/lib/utils";
 
-const bestScoreKey = (id: string) => `o2w:formation:${id}:quiz-best`;
-
+type Quiz = NonNullable<ApiFormation["quiz"]>;
 type Phase = "intro" | "running" | "result";
 
 interface FormationQuizProps {
@@ -17,73 +28,76 @@ interface FormationQuizProps {
 }
 
 /**
- * Validation quiz of a formation.
+ * Quiz de validation d'une formation (§5.4).
  *
- * One question at a time: the learner picks an answer, validates it, and gets the
- * correction plus the explanation immediately — then moves on. The final screen
- * scores the attempt and lets the learner review every question. The best score is
- * kept per formation in localStorage (a real backend can replace that later).
+ * La correction est calculée par le SERVEUR : le navigateur ne reçoit jamais les
+ * bonnes réponses avant d'avoir soumis. C'est ce qui change par rapport à la
+ * maquette, où la correction s'affichait après chaque question — impossible sans
+ * envoyer le corrigé au client, donc sans rendre le quiz contournable.
+ *
+ * Le parcours devient : répondre à tout → soumettre → correction détaillée,
+ * question par question, avec les explications.
  */
 export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProps) {
   const total = quiz.questions.length;
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>(() => quiz.questions.map(() => null));
-  /** Index of the option being considered, before validation. */
-  const [pending, setPending] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [bestScore, setBestScore] = useState<number | null>(null);
+  // Un tableau d'index cochés par question : la forme ne dépend pas du type,
+  // seul le nombre de cases autorisées change.
+  const [answers, setAnswers] = useState<number[][]>(() => quiz.questions.map(() => []));
+  const [result, setResult] = useState<ApiFormationQuizResult | null>(null);
   const [reviewing, setReviewing] = useState<number | null>(null);
 
-  const question = quiz.questions[current];
+  const { run, pending, error } = useMutation(api.formations.submitQuiz);
 
-  const correctCount = useMemo(
-    () => answers.filter((a, i) => a !== null && a === quiz.questions[i].bonneReponse).length,
-    [answers, quiz.questions],
-  );
-  const score = Math.round((correctCount / total) * 100);
-  const passed = score >= quiz.scoreMinimum;
+  const profile = useProfileOptional();
+  // Meilleur score conservé côté serveur, exposé sur le profil du jeune.
+  const bestScore = profile?.jeune.scoresFormations?.[formationId] ?? null;
+  const dejaValidee = profile?.jeune.formationsValidees?.includes(formationId) ?? false;
 
-  // Restore the best score once on mount.
-  useEffect(() => {
-    const saved = window.localStorage.getItem(bestScoreKey(formationId));
-    if (saved !== null && !Number.isNaN(Number(saved))) setBestScore(Number(saved));
-  }, [formationId]);
+  const question = quiz.questions[current]!;
+  const answeredCount = answers.filter((selection) => selection.length > 0).length;
+  const repondu = (index: number) => (answers[index]?.length ?? 0) > 0;
 
-  // Persist the best score when an attempt ends.
-  useEffect(() => {
-    if (phase !== "result") return;
-    setBestScore((prev) => {
-      const next = prev === null ? score : Math.max(prev, score);
-      window.localStorage.setItem(bestScoreKey(formationId), String(next));
-      return next;
-    });
-  }, [phase, score, formationId]);
+  /**
+   * Coche ou décoche une option.
+   *
+   * Choix unique : la sélection est remplacée. Choix multiples : on bascule,
+   * et recliquer retire — c'est le seul moyen de corriger une erreur.
+   */
+  const toggle = (optionIndex: number) => {
+    setAnswers((prev) =>
+      prev.map((selection, i) => {
+        if (i !== current) return selection;
+        if (question.type !== "choix_multiples") return [optionIndex];
+        return selection.includes(optionIndex)
+          ? selection.filter((value) => value !== optionIndex)
+          : [...selection, optionIndex].sort((a, b) => a - b);
+      }),
+    );
+  };
 
   const restart = () => {
-    setAnswers(quiz.questions.map(() => null));
+    setAnswers(quiz.questions.map(() => []));
     setCurrent(0);
-    setPending(null);
-    setRevealed(false);
+    setResult(null);
     setReviewing(null);
     setPhase("running");
   };
 
-  const validate = () => {
-    if (pending === null) return;
-    setAnswers((prev) => prev.map((a, i) => (i === current ? pending : a)));
-    setRevealed(true);
-  };
+  const submit = async () => {
+    const payload = quiz.questions
+      .map((q, i) => ({ questionId: q.id, reponses: answers[i] ?? [] }))
+      .filter((entry) => entry.reponses.length > 0);
 
-  const next = () => {
-    if (current === total - 1) {
-      setPhase("result");
-      return;
-    }
-    setCurrent((c) => c + 1);
-    setPending(null);
-    setRevealed(false);
+    const graded = await run(formationId, payload);
+    if (!graded) return;
+
+    setResult(graded);
+    setPhase("result");
+    // Le score d'employabilité vient de changer : on recharge le profil.
+    if (graded.reussi) void profile?.validerFormation(formationId, graded.score);
   };
 
   /* ---------------------------------------------------------------- locked */
@@ -97,8 +111,8 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
           </span>
           <h3 className="font-headline text-lg font-bold text-primary">{quiz.titre}</h3>
           <p className="max-w-md text-sm text-on-surface-variant">
-            Terminez la lecture du cours pour débloquer le quiz de validation
-            {" "}({total} questions · {quiz.scoreMinimum}% requis).
+            Terminez la lecture du cours pour débloquer le test de la formation ({total} questions ·{" "}
+            {quiz.scoreMinimum}% requis).
           </p>
           {bestScore !== null && (
             <p className="text-xs font-semibold text-on-surface-variant">
@@ -113,13 +127,27 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
   /* ----------------------------------------------------------------- intro */
 
   if (phase === "intro") {
+    // Déclarés à part et typés : dans le JSX, l'inférence élargissait `icon` en
+    // `string`, ce que `Icon` n'accepte plus — il exige un nom du registre.
+    const reperes: { icon: IconName; label: string; hint: string }[] = [
+      { icon: "help", label: `${total} questions`, hint: "QCM et vrai/faux" },
+      { icon: "flag", label: `${quiz.scoreMinimum}% requis`, hint: "pour valider" },
+      profile
+        ? {
+            icon: "bolt",
+            label: `+${POINTS_FORMATION_VALIDEE} points`,
+            hint: dejaValidee ? "déjà acquis" : "sur votre score",
+          }
+        : { icon: "replay", label: "Illimité", hint: "tentatives possibles" },
+    ];
+
     return (
       <Card className="mt-6 overflow-hidden">
         <div className="flex items-center gap-3 border-b border-outline-variant bg-secondary-container/30 px-5 py-3">
           <Icon name="quiz" className="text-xl text-secondary" filled />
           <div className="flex-1">
             <p className="text-xs font-bold uppercase tracking-wide text-secondary">
-              Quiz de validation
+              Test de la formation
             </p>
             <h3 className="font-headline font-bold text-primary">{quiz.titre}</h3>
           </div>
@@ -141,11 +169,7 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
           <p className="text-sm text-on-surface-variant">{quiz.description}</p>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { icon: "help", label: `${total} questions`, hint: "QCM et vrai/faux" },
-              { icon: "flag", label: `${quiz.scoreMinimum}% requis`, hint: "pour valider" },
-              { icon: "replay", label: "Illimité", hint: "tentatives possibles" },
-            ].map((item) => (
+            {reperes.map((item) => (
               <div
                 key={item.label}
                 className="flex items-center gap-3 rounded-lg bg-surface-container-low px-3 py-3"
@@ -162,10 +186,10 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="secondary" size="lg" onClick={restart}>
               <Icon name="play_arrow" className="text-[18px]" />
-              {bestScore === null ? "Commencer le quiz" : "Refaire le quiz"}
+              {bestScore === null ? "Commencer le test" : "Refaire le test"}
             </Button>
             <p className="text-xs text-on-surface-variant">
-              La correction s&apos;affiche après chaque réponse.
+              La correction détaillée s&apos;affiche à la fin du test.
             </p>
           </div>
         </CardBody>
@@ -175,7 +199,11 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
 
   /* ---------------------------------------------------------------- result */
 
-  if (phase === "result") {
+  if (phase === "result" && result) {
+    const correctCount = result.corrections.filter((c) => c.correcte).length;
+    // Indexé par id : l'ordre des corrections suit celui du serveur.
+    const byQuestion = new Map(result.corrections.map((c) => [c.questionId, c]));
+
     return (
       <Card className="mt-6 overflow-hidden">
         <CardBody className="space-y-6">
@@ -183,60 +211,70 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
             <span
               className={cn(
                 "flex h-16 w-16 items-center justify-center rounded-full",
-                passed ? "bg-success-container text-success" : "bg-error-container text-on-error-container",
+                result.reussi
+                  ? "bg-success-container text-success"
+                  : "bg-error-container text-on-error-container",
               )}
             >
-              <Icon name={passed ? "workspace_premium" : "refresh"} className="text-3xl" filled />
+              <Icon
+                name={result.reussi ? "workspace_premium" : "refresh"}
+                className="text-3xl"
+                filled
+              />
             </span>
-            <ProgressRing value={score} size={112} strokeWidth={9} />
+            <ProgressRing value={result.score} size={112} strokeWidth={9} />
             <div>
               <h3 className="font-headline text-xl font-bold text-primary">
-                {passed ? "Quiz validé 🎉" : "Score insuffisant"}
+                {result.reussi ? "Test validé 🎉" : "Score insuffisant"}
               </h3>
               <p className="mt-1 text-sm text-on-surface-variant">
                 {correctCount} bonne{correctCount > 1 ? "s" : ""} réponse
                 {correctCount > 1 ? "s" : ""} sur {total}
-                {passed
-                  ? " — votre certificat est disponible."
-                  : ` — il en faut ${Math.ceil((quiz.scoreMinimum / 100) * total)} pour valider.`}
+                {result.reussi
+                  ? " — formation validée."
+                  : ` — il en faut ${Math.ceil((result.scoreMinimum / 100) * total)} pour valider.`}
               </p>
-              {bestScore !== null && bestScore > score && (
+              {bestScore !== null && bestScore > result.score && (
                 <p className="mt-1 text-xs font-semibold text-on-surface-variant">
                   Votre meilleur score reste {bestScore}%.
                 </p>
               )}
-            </div>
-            <div className="flex flex-wrap justify-center gap-3">
-              <Button variant={passed ? "outline" : "secondary"} onClick={restart}>
-                <Icon name="replay" className="text-[18px]" /> Recommencer
-              </Button>
-              {passed && (
-                <ButtonLink href="/espace-jeune/documents" variant="secondary">
-                  <Icon name="workspace_premium" className="text-[18px]" /> Mon certificat
-                </ButtonLink>
+              {profile && result.reussi && (
+                <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full bg-secondary-container px-3 py-1 text-xs font-bold text-on-secondary-container">
+                  <Icon name="bolt" filled className="text-[15px]" />+{POINTS_FORMATION_VALIDEE}{" "}
+                  points · score d&apos;employabilité {profile.score}/100
+                </p>
               )}
             </div>
+            <Button variant={result.reussi ? "outline" : "secondary"} onClick={restart}>
+              <Icon name="replay" className="text-[18px]" /> Recommencer
+            </Button>
           </div>
 
-          {/* Answer review */}
+          {/* Correction détaillée, renvoyée par le serveur */}
           <div className="border-t border-outline-variant pt-4">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-on-surface-variant">
-              Revoir mes réponses
+              Correction
             </p>
             <div className="space-y-2">
               {quiz.questions.map((q, i) => {
-                const given = answers[i];
-                const ok = given === q.bonneReponse;
+                const correction = byQuestion.get(q.id);
+                const given = answers[i] ?? [];
+                const ok = correction?.correcte ?? false;
                 const open = reviewing === i;
+
                 return (
-                  <div key={q.id} className="overflow-hidden rounded-lg border border-outline-variant">
+                  <div
+                    key={q.id}
+                    className="overflow-hidden rounded-lg border border-outline-variant"
+                  >
                     <button
                       type="button"
                       onClick={() => setReviewing(open ? null : i)}
                       className="flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-surface-container-low"
                     >
                       <Icon
-                        name={ok ? "check_circle" : "cancel"}
+                        name={ok ? "check_circle" : "close"}
                         filled
                         className={cn("mt-0.5 text-[18px]", ok ? "text-success" : "text-error")}
                       />
@@ -244,23 +282,33 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
                         <span className="text-on-surface-variant">{i + 1}.</span> {q.enonce}
                       </span>
                       <Icon
-                        name={open ? "expand_less" : "expand_more"}
-                        className="mt-0.5 text-[18px] text-on-surface-variant"
+                        name="chevron_right"
+                        className={cn(
+                          "mt-0.5 text-[18px] text-on-surface-variant transition-transform",
+                          open && "rotate-90",
+                        )}
                       />
                     </button>
-                    {open && (
+                    {open && correction && (
                       <div className="space-y-2 border-t border-outline-variant bg-surface-container-low px-3 py-3 text-sm">
-                        {!ok && given !== null && (
+                        {!ok && given.length > 0 && (
                           <p className="text-on-surface-variant">
-                            <span className="font-semibold text-error">Votre réponse :</span>{" "}
-                            {q.options[given]}
+                            <span className="font-semibold text-error">
+                              Votre réponse{given.length > 1 ? "s" : ""} :
+                            </span>{" "}
+                            {given.map((index) => q.options[index]).join(", ")}
                           </p>
                         )}
                         <p className="text-on-surface-variant">
-                          <span className="font-semibold text-success">Bonne réponse :</span>{" "}
-                          {q.options[q.bonneReponse]}
+                          <span className="font-semibold text-success">
+                            Bonne{correction.bonnesReponses.length > 1 ? "s" : ""} réponse
+                            {correction.bonnesReponses.length > 1 ? "s" : ""} :
+                          </span>{" "}
+                          {correction.bonnesReponses.map((index) => q.options[index]).join(", ")}
                         </p>
-                        <p className="text-on-surface-variant">{q.explication}</p>
+                        {correction.explication && (
+                          <p className="text-on-surface-variant">{correction.explication}</p>
+                        )}
                         {q.chapitre && (
                           <p className="text-xs italic text-on-surface-variant">
                             À revoir dans « {q.chapitre} »
@@ -280,8 +328,7 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
 
   /* --------------------------------------------------------------- running */
 
-  const answered = answers[current];
-  const isCorrect = revealed && answered === question.bonneReponse;
+  const isLast = current === total - 1;
 
   return (
     <Card className="mt-6 overflow-hidden">
@@ -289,72 +336,75 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
       <div className="space-y-3 border-b border-outline-variant bg-surface-container-low px-5 py-4">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-secondary">
-            <Icon name="quiz" className="text-[16px]" filled /> Quiz de validation
+            <Icon name="quiz" className="text-[16px]" filled /> Test de la formation
           </span>
           <span className="text-sm font-semibold text-on-surface-variant">
             Question {current + 1} / {total}
           </span>
         </div>
         <div className="flex gap-1.5">
-          {quiz.questions.map((q, i) => {
-            const a = answers[i];
-            const done = a !== null && (i < current || revealed);
-            return (
-              <span
-                key={q.id}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full transition-colors",
-                  done
-                    ? a === q.bonneReponse
-                      ? "bg-success"
-                      : "bg-error"
-                    : i === current
-                      ? "bg-secondary"
-                      : "bg-surface-variant",
-                )}
-              />
-            );
-          })}
+          {quiz.questions.map((q, i) => (
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => setCurrent(i)}
+              aria-label={`Aller à la question ${i + 1}`}
+              className={cn(
+                "h-1.5 flex-1 rounded-full transition-colors",
+                repondu(i)
+                  ? "bg-secondary"
+                  : i === current
+                    ? "bg-secondary/50"
+                    : "bg-surface-variant",
+              )}
+            />
+          ))}
         </div>
       </div>
 
       <CardBody className="space-y-5">
-        <h3 className="font-headline text-lg font-bold text-primary">{question.enonce}</h3>
+        <div className="space-y-1">
+          <h3 className="font-headline text-lg font-bold text-primary">{question.enonce}</h3>
+          {/* La consigne est explicite : la forme des cases seule ne suffit pas
+              à faire comprendre qu'on attend plusieurs réponses. */}
+          <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+            {question.type === "choix_multiples"
+              ? "Plusieurs réponses attendues"
+              : "Une seule réponse"}
+          </p>
+        </div>
 
         <div className="space-y-2.5">
           {question.options.map((option, i) => {
-            const isPending = !revealed && pending === i;
-            const isRight = revealed && i === question.bonneReponse;
-            const isWrongPick = revealed && answered === i && i !== question.bonneReponse;
-
+            const multiple = question.type === "choix_multiples";
+            const selected = (answers[current] ?? []).includes(i);
             return (
               <button
                 key={option}
                 type="button"
-                disabled={revealed}
-                onClick={() => setPending(i)}
+                onClick={() => toggle(i)}
+                role={multiple ? "checkbox" : "radio"}
+                aria-checked={selected}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
-                  isRight && "border-success bg-success-container/40",
-                  isWrongPick && "border-error bg-error-container/40",
-                  isPending && "border-secondary bg-secondary-container/40",
-                  !revealed && !isPending && "border-outline-variant hover:bg-surface-container-low",
-                  revealed && !isRight && !isWrongPick && "border-outline-variant opacity-60",
+                  selected
+                    ? "border-secondary bg-secondary-container/40"
+                    : "border-outline-variant hover:bg-surface-container-low",
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold",
-                    isRight && "border-success bg-success text-white",
-                    isWrongPick && "border-error bg-error text-white",
-                    isPending && "border-secondary bg-secondary text-white",
-                    !isRight && !isWrongPick && !isPending && "border-outline text-on-surface-variant",
+                    "flex h-6 w-6 shrink-0 items-center justify-center border text-xs font-bold",
+                    // Rond = un seul choix, carré = plusieurs : convention que
+                    // les formulaires natifs ont installée depuis longtemps.
+                    multiple ? "rounded" : "rounded-full",
+                    selected
+                      ? "border-secondary bg-secondary text-white"
+                      : "border-outline text-on-surface-variant",
                   )}
                 >
-                  {isRight ? (
+                  {selected && multiple ? (
                     <Icon name="check" className="text-[14px]" />
-                  ) : isWrongPick ? (
-                    <Icon name="close" className="text-[14px]" />
                   ) : (
                     String.fromCharCode(65 + i)
                   )}
@@ -365,49 +415,34 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
           })}
         </div>
 
-        {/* Correction + explanation, shown once the answer is validated */}
-        {revealed && (
-          <div
-            className={cn(
-              "space-y-1.5 rounded-lg border-l-4 px-4 py-3",
-              isCorrect
-                ? "border-success bg-success-container/30"
-                : "border-error bg-error-container/30",
-            )}
-          >
-            <p
-              className={cn(
-                "flex items-center gap-2 text-sm font-bold",
-                isCorrect ? "text-success" : "text-error",
-              )}
-            >
-              <Icon name={isCorrect ? "check_circle" : "cancel"} filled className="text-[18px]" />
-              {isCorrect ? "Bonne réponse !" : "Réponse incorrecte"}
-            </p>
-            <p className="text-sm text-on-surface-variant">{question.explication}</p>
-            {question.chapitre && (
-              <p className="text-xs italic text-on-surface-variant">
-                Chapitre : « {question.chapitre} »
-              </p>
-            )}
-          </div>
-        )}
+        {error && <ErrorBanner error={error} />}
       </CardBody>
 
       <div className="flex items-center justify-between border-t border-outline-variant px-5 py-3">
         <Button variant="ghost" onClick={() => setPhase("intro")}>
           Quitter
         </Button>
-        {revealed ? (
-          <Button variant="secondary" onClick={next}>
-            {current === total - 1 ? "Voir mon résultat" : "Question suivante"}
-            <Icon name="arrow_forward" className="text-[18px]" />
-          </Button>
-        ) : (
-          <Button onClick={validate} disabled={pending === null}>
-            Valider ma réponse
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {current > 0 && (
+            <Button variant="ghost" onClick={() => setCurrent((c) => c - 1)}>
+              Précédent
+            </Button>
+          )}
+          {isLast ? (
+            <Button
+              variant="secondary"
+              onClick={() => void submit()}
+              disabled={answeredCount < total || pending}
+            >
+              {pending ? "Correction…" : "Terminer et voir la correction"}
+            </Button>
+          ) : (
+            <Button onClick={() => setCurrent((c) => c + 1)} disabled={!repondu(current)}>
+              Question suivante
+              <Icon name="arrow_forward" className="text-[18px]" />
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );

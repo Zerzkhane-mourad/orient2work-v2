@@ -9,15 +9,36 @@ export const metadata: Metadata = {
 };
 
 const values = [
-  { icon: "explore", title: "Orienter", desc: "Aider les jeunes à mieux se présenter et à se préparer." },
-  { icon: "workspace_premium", title: "Valoriser", desc: "Mettre en avant les compétences et les expériences des talents." },
-  { icon: "hub", title: "Connecter", desc: "Faciliter la mise en relation entre jeunes et entreprises." },
-];
+  {
+    icon: "explore",
+    title: "Orienter",
+    desc: "Aider les jeunes à mieux se présenter et à se préparer.",
+  },
+  {
+    icon: "workspace_premium",
+    title: "Valoriser",
+    desc: "Mettre en avant les compétences et les expériences des talents.",
+  },
+  {
+    icon: "hub",
+    title: "Connecter",
+    desc: "Faciliter la mise en relation entre jeunes et entreprises.",
+  },
+] as const;
 
 const forumPhases = [
-  { title: "Avant le forum", desc: "Les étudiants créent leur profil, passent le test et suivent les formations de préparation." },
-  { title: "Pendant le forum", desc: "Les entreprises consultent les profils ; les jeunes candidatent et planifient des entretiens." },
-  { title: "Après le forum", desc: "L'impact se prolonge : les offres et entretiens continuent sur la plateforme." },
+  {
+    title: "Avant le forum",
+    desc: "Les étudiants créent leur profil, passent le test et suivent les formations de préparation.",
+  },
+  {
+    title: "Pendant le forum",
+    desc: "Les entreprises consultent les profils ; les jeunes candidatent et planifient des entretiens.",
+  },
+  {
+    title: "Après le forum",
+    desc: "L'impact se prolonge : les offres et entretiens continuent sur la plateforme.",
+  },
 ];
 
 export default function AProposPage() {
@@ -50,7 +71,7 @@ export default function AProposPage() {
           ))}
         </div>
       </section>
-
+{/* 
       <section className="bg-primary py-20 text-white">
         <div className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop">
           <h2 className="mb-12 text-center font-headline text-3xl font-bold">
@@ -68,7 +89,7 @@ export default function AProposPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
     </>
   );
 }

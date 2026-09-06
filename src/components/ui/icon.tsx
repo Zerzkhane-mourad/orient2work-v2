@@ -11,13 +11,23 @@ import {
   MdBadge,
   MdBarChart,
   MdBlock,
+  MdBolt,
+  MdOpenInNew,
+  MdError,
+  MdHourglassTop,
+  MdLock,
+  MdRefresh,
+  MdWifiOff,
   MdBusiness,
   MdBusinessCenter,
   MdCalendarMonth,
   MdCall,
   MdCategory,
   MdCheck,
+  MdCheckBoxOutlineBlank,
+  MdExpandMore,
   MdCheckCircle,
+  MdPublic,
   MdChevronRight,
   MdCloudUpload,
   MdCode,
@@ -28,6 +38,9 @@ import {
   MdDomainAdd,
   MdDownload,
   MdEdit,
+  MdEditNote,
+  MdMilitaryTech,
+  MdFlag,
   MdEvent,
   MdEventAvailable,
   MdEventBusy,
@@ -41,6 +54,7 @@ import {
   MdRedo,
   MdGroups,
   MdHandshake,
+  MdHelp,
   MdHub,
   MdInbox,
   MdInfo,
@@ -98,6 +112,7 @@ import {
   MdWorkspacePremium,
   MdCelebration,
   MdClose,
+  MdHome,
 } from "react-icons/md";
 import { cn } from "@/lib/utils";
 
@@ -106,7 +121,12 @@ import { cn } from "@/lib/utils";
  * (Material Design set). Keeping the string API means components stay decoupled
  * from the underlying icon library.
  */
-const ICONS: Record<string, IconType> = {
+/*
+ * `satisfies` et non une annotation : `Record<string, IconType>` aurait réduit
+ * `keyof typeof ICONS` à `string`, et `IconName` n'aurait plus rien vérifié —
+ * chaque nom inconnu serait repassé silencieusement par l'icône de repli.
+ */
+const ICONS = {
   add: MdAdd,
   add_box: MdAddBox,
   all_inclusive: MdAllInclusive,
@@ -118,6 +138,14 @@ const ICONS: Record<string, IconType> = {
   badge: MdBadge,
   bar_chart: MdBarChart,
   block: MdBlock,
+  bolt: MdBolt,
+  open_in_new: MdOpenInNew,
+  // Utilisés par les états d'erreur de l'API (voir ui/states.tsx).
+  error: MdError,
+  hourglass_top: MdHourglassTop,
+  lock: MdLock,
+  refresh: MdRefresh,
+  wifi_off: MdWifiOff,
   business: MdBusiness,
   business_center: MdBusinessCenter,
   calendar_month: MdCalendarMonth,
@@ -125,7 +153,9 @@ const ICONS: Record<string, IconType> = {
   category: MdCategory,
   celebration: MdCelebration,
   check: MdCheck,
+  check_box_outline_blank: MdCheckBoxOutlineBlank,
   check_circle: MdCheckCircle,
+  public: MdPublic,
   chevron_right: MdChevronRight,
   close: MdClose,
   cloud_upload: MdCloudUpload,
@@ -137,6 +167,10 @@ const ICONS: Record<string, IconType> = {
   domain_add: MdDomainAdd,
   download: MdDownload,
   edit: MdEdit,
+  edit_note: MdEditNote,
+  military_tech: MdMilitaryTech,
+  flag: MdFlag,
+  expand_more: MdExpandMore,
   event: MdEvent,
   event_available: MdEventAvailable,
   event_busy: MdEventBusy,
@@ -150,8 +184,10 @@ const ICONS: Record<string, IconType> = {
   redo: MdRedo,
   groups: MdGroups,
   handshake: MdHandshake,
+  help: MdHelp,
   hub: MdHub,
   inbox: MdInbox,
+  home: MdHome,
   info: MdInfo,
   insights: MdInsights,
   language: MdLanguage,
@@ -205,11 +241,32 @@ const ICONS: Record<string, IconType> = {
   work: MdWork,
   work_history: MdWorkHistory,
   workspace_premium: MdWorkspacePremium,
-};
+} satisfies Record<string, IconType>;
+
+/**
+ * Nom sémantique d'une icône du registre ci-dessus.
+ *
+ * Typé sur les clés réelles, et non `string` : un nom inconnu retombait
+ * silencieusement sur l'icône « info », si bien qu'une coquille passait la
+ * relecture et le lint pour ne se voir qu'à l'écran. Le compilateur la refuse.
+ */
+export type IconName = keyof typeof ICONS;
+
+/**
+ * Convertit une chaîne d'origine externe en nom d'icône sûr.
+ *
+ * Le compilateur garantit les noms ÉCRITS dans le code ; il ne peut rien pour
+ * ceux qui arrivent de l'API — l'icône d'une notification, par exemple, est
+ * choisie côté serveur. La validation se fait donc à la frontière, une fois,
+ * plutôt qu'en relâchant le type partout.
+ */
+export function asIconName(valeur: string, repli: IconName = "info"): IconName {
+  return valeur in ICONS ? (valeur as IconName) : repli;
+}
 
 interface IconProps {
   /** Semantic icon name from the registry above, e.g. "work", "school", "check". */
-  name: string;
+  name: IconName;
   /** Kept for API compatibility (Material Design icons are filled by default). */
   filled?: boolean;
   className?: string;
@@ -223,5 +280,7 @@ interface IconProps {
 export function Icon({ name, className, style }: IconProps) {
   const Glyph = ICONS[name] ?? MdInfo;
   // Default to 20px; any `text-[size]` passed in className overrides via twMerge.
-  return <Glyph aria-hidden className={cn("inline-block shrink-0 text-xl", className)} style={style} />;
+  return (
+    <Glyph aria-hidden className={cn("inline-block shrink-0 text-xl", className)} style={style} />
+  );
 }

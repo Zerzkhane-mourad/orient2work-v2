@@ -8,6 +8,13 @@ interface AvisCardProps {
   avis: Avis;
   /** Marks the review written by the current user. */
   isMine?: boolean;
+  /**
+   * Le lecteur a-t-il voté pour cet avis.
+   *
+   * Ne sert QU'À L'APPARENCE du bouton — jamais au calcul du compteur. Le
+   * nombre affiché vient de `avis.utile`, qui est le total tenu par le serveur
+   * et inclut donc déjà ce vote.
+   */
   helpful: boolean;
   onToggleHelpful: () => void;
 }
@@ -37,15 +44,25 @@ export function AvisCard({ avis, isMine, helpful, onToggleHelpful }: AvisCardPro
             type="button"
             onClick={onToggleHelpful}
             aria-pressed={helpful}
+            // Sans libellé, un lecteur d'écran n'annonçait que le compteur
+            // (« 3, activé ») : le pouce levé ne dit rien hors de l'écran.
+            aria-label="Cet avis m'a été utile"
             className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+              "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
               helpful
                 ? "border-secondary bg-secondary-container text-on-secondary-container"
                 : "border-outline-variant text-on-surface-variant hover:border-secondary hover:text-primary",
             )}
           >
             <Icon name="thumb_up" filled={helpful} className="text-[14px]" />
-            {avis.utile + (helpful ? 1 : 0)}
+            {/*
+              `avis.utile` SEUL.
+
+              On y ajoutait « +1 quand le lecteur a voté » : or ce total, compté
+              par le serveur, comprend déjà son vote. Un avis à zéro passait donc
+              directement à deux au premier clic.
+            */}
+            {avis.utile}
           </button>
         </div>
       </div>

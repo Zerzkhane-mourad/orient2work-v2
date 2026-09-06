@@ -14,7 +14,8 @@ export function TalentCard({ talent }: { talent: Jeune }) {
             </h3>
             <p className="text-sm text-on-surface-variant">{talent.titre}</p>
             <p className="mt-1 flex items-center gap-1 text-xs text-on-surface-variant">
-              <Icon name="location_on" className="text-[14px]" /> {talent.ville} • {talent.niveauEtudes}
+              <Icon name="location_on" className="text-[14px]" /> {talent.ville} •{" "}
+              {talent.niveauEtudes}
             </p>
           </div>
           <div className="rounded-lg bg-secondary-container px-2.5 py-1 text-center text-on-secondary-container">

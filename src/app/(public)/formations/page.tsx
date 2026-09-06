@@ -1,7 +1,8 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { SectionHeading } from "@/components/marketing/section-heading";
+import { SkeletonCard } from "@/components/ui";
 import { FormationsCatalog } from "@/features/formations/formations-catalog";
-import { formations } from "@/lib/mock-data";
 
 export const metadata: Metadata = {
   title: "Formations",
@@ -18,7 +19,17 @@ export default function FormationsPage() {
         subtitle="Préparez votre insertion professionnelle avec des formations certifiantes, accessibles après validation de votre profil."
         className="mb-10"
       />
-      <FormationsCatalog formations={formations} />
+      {/* Sans `detailBase`, les cartes renvoient vers l'inscription : le contenu
+          des cours est réservé aux comptes jeunes. */}
+      {/* Le catalogue lit l'URL (`?q=`) : sans frontière de suspense, cette
+          page cesserait d'être prérendue. */}
+      <Suspense fallback={<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>}>
+        <FormationsCatalog />
+      </Suspense>
     </div>
   );
 }

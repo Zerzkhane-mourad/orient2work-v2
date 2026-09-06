@@ -15,65 +15,67 @@ const config: Config = {
     extend: {
       colors: {
         // Surfaces
-        background: "var(--color-background)",
-        surface: "var(--color-surface)",
-        "surface-dim": "var(--color-surface-dim)",
-        "surface-bright": "var(--color-surface-bright)",
-        "surface-container-lowest": "var(--color-surface-container-lowest)",
-        "surface-container-low": "var(--color-surface-container-low)",
-        "surface-container": "var(--color-surface-container)",
-        "surface-container-high": "var(--color-surface-container-high)",
-        "surface-container-highest": "var(--color-surface-container-highest)",
-        "surface-variant": "var(--color-surface-variant)",
-        "surface-tint": "var(--color-surface-tint)",
-        "inverse-surface": "var(--color-inverse-surface)",
-        "inverse-on-surface": "var(--color-inverse-on-surface)",
+        background: "rgb(var(--color-background) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        "surface-dim": "rgb(var(--color-surface-dim) / <alpha-value>)",
+        "surface-bright": "rgb(var(--color-surface-bright) / <alpha-value>)",
+        "surface-container-lowest": "rgb(var(--color-surface-container-lowest) / <alpha-value>)",
+        "surface-container-low": "rgb(var(--color-surface-container-low) / <alpha-value>)",
+        "surface-container": "rgb(var(--color-surface-container) / <alpha-value>)",
+        "surface-container-high": "rgb(var(--color-surface-container-high) / <alpha-value>)",
+        "surface-container-highest": "rgb(var(--color-surface-container-highest) / <alpha-value>)",
+        "surface-variant": "rgb(var(--color-surface-variant) / <alpha-value>)",
+        "surface-tint": "rgb(var(--color-surface-tint) / <alpha-value>)",
+        "inverse-surface": "rgb(var(--color-inverse-surface) / <alpha-value>)",
+        "inverse-on-surface": "rgb(var(--color-inverse-on-surface) / <alpha-value>)",
 
         // On-surface text
-        "on-background": "var(--color-on-background)",
-        "on-surface": "var(--color-on-surface)",
-        "on-surface-variant": "var(--color-on-surface-variant)",
+        "on-background": "rgb(var(--color-on-background) / <alpha-value>)",
+        "on-surface": "rgb(var(--color-on-surface) / <alpha-value>)",
+        "on-surface-variant": "rgb(var(--color-on-surface-variant) / <alpha-value>)",
 
         // Outlines
-        outline: "var(--color-outline)",
-        "outline-variant": "var(--color-outline-variant)",
+        outline: "rgb(var(--color-outline) / <alpha-value>)",
+        "outline-variant": "rgb(var(--color-outline-variant) / <alpha-value>)",
 
         // Primary (Navy)
-        primary: "var(--color-primary)",
-        "on-primary": "var(--color-on-primary)",
-        "primary-container": "var(--color-primary-container)",
-        "on-primary-container": "var(--color-on-primary-container)",
-        "inverse-primary": "var(--color-inverse-primary)",
-        "primary-fixed": "var(--color-primary-fixed)",
-        "primary-fixed-dim": "var(--color-primary-fixed-dim)",
-        "on-primary-fixed": "var(--color-on-primary-fixed)",
-        "on-primary-fixed-variant": "var(--color-on-primary-fixed-variant)",
+        primary: "rgb(var(--color-primary) / <alpha-value>)",
+        "on-primary": "rgb(var(--color-on-primary) / <alpha-value>)",
+        "primary-container": "rgb(var(--color-primary-container) / <alpha-value>)",
+        "on-primary-container": "rgb(var(--color-on-primary-container) / <alpha-value>)",
+        "inverse-primary": "rgb(var(--color-inverse-primary) / <alpha-value>)",
+        "primary-fixed": "rgb(var(--color-primary-fixed) / <alpha-value>)",
+        "primary-fixed-dim": "rgb(var(--color-primary-fixed-dim) / <alpha-value>)",
+        "on-primary-fixed": "rgb(var(--color-on-primary-fixed) / <alpha-value>)",
+        "on-primary-fixed-variant": "rgb(var(--color-on-primary-fixed-variant) / <alpha-value>)",
 
         // Secondary (Gold)
-        secondary: "var(--color-secondary)",
-        "on-secondary": "var(--color-on-secondary)",
-        "secondary-container": "var(--color-secondary-container)",
-        "on-secondary-container": "var(--color-on-secondary-container)",
-        "secondary-fixed": "var(--color-secondary-fixed)",
-        "secondary-fixed-dim": "var(--color-secondary-fixed-dim)",
-        "on-secondary-fixed": "var(--color-on-secondary-fixed)",
-        "on-secondary-fixed-variant": "var(--color-on-secondary-fixed-variant)",
+        secondary: "rgb(var(--color-secondary) / <alpha-value>)",
+        "on-secondary": "rgb(var(--color-on-secondary) / <alpha-value>)",
+        "secondary-container": "rgb(var(--color-secondary-container) / <alpha-value>)",
+        "on-secondary-container": "rgb(var(--color-on-secondary-container) / <alpha-value>)",
+        "secondary-fixed": "rgb(var(--color-secondary-fixed) / <alpha-value>)",
+        "secondary-fixed-dim": "rgb(var(--color-secondary-fixed-dim) / <alpha-value>)",
+        "on-secondary-fixed": "rgb(var(--color-on-secondary-fixed) / <alpha-value>)",
+        "on-secondary-fixed-variant": "rgb(var(--color-on-secondary-fixed-variant) / <alpha-value>)",
 
         // Tertiary
-        tertiary: "var(--color-tertiary)",
-        "on-tertiary": "var(--color-on-tertiary)",
-        "tertiary-container": "var(--color-tertiary-container)",
-        "on-tertiary-container": "var(--color-on-tertiary-container)",
+        tertiary: "rgb(var(--color-tertiary) / <alpha-value>)",
+        "on-tertiary": "rgb(var(--color-on-tertiary) / <alpha-value>)",
+        "tertiary-container": "rgb(var(--color-tertiary-container) / <alpha-value>)",
+        "on-tertiary-container": "rgb(var(--color-on-tertiary-container) / <alpha-value>)",
 
         // Semantic
-        error: "var(--color-error)",
-        "on-error": "var(--color-on-error)",
-        "error-container": "var(--color-error-container)",
-        "on-error-container": "var(--color-on-error-container)",
-        success: "var(--color-success)",
-        "success-container": "var(--color-success-container)",
-        warning: "var(--color-warning)",
-        "warning-container": "var(--color-warning-container)",
+        error: "rgb(var(--color-error) / <alpha-value>)",
+        "on-error": "rgb(var(--color-on-error) / <alpha-value>)",
+        "error-container": "rgb(var(--color-error-container) / <alpha-value>)",
+        "on-error-container": "rgb(var(--color-on-error-container) / <alpha-value>)",
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        "success-container": "rgb(var(--color-success-container) / <alpha-value>)",
+        "on-success-container": "rgb(var(--color-on-success-container) / <alpha-value>)",
+        warning: "rgb(var(--color-warning) / <alpha-value>)",
+        "warning-container": "rgb(var(--color-warning-container) / <alpha-value>)",
+        "on-warning-container": "rgb(var(--color-on-warning-container) / <alpha-value>)",
       },
       fontFamily: {
         headline: ["var(--font-headline)", "sans-serif"],
@@ -112,19 +114,36 @@ const config: Config = {
         "level-1": "0px 4px 20px rgba(11, 31, 58, 0.05)",
         "level-2": "0px 8px 30px rgba(11, 31, 58, 0.12)",
       },
+      /*
+       * Apparition brève d'un contenu remplacé sur place — l'énoncé d'une
+       * question qui change, par exemple : sans elle, rien ne distingue deux
+       * questions successives de formulation proche.
+       *
+       * `globals.css` ramène déjà toute animation à une durée imperceptible
+       * sous `prefers-reduced-motion`, il n'y a rien à prévoir de plus ici.
+       */
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 200ms ease-out",
+      },
       // Brand-tuned defaults for rendered rich-text (`prose`).
       typography: {
         DEFAULT: {
           css: {
-            "--tw-prose-body": "var(--color-on-surface)",
-            "--tw-prose-headings": "var(--color-primary)",
-            "--tw-prose-bold": "var(--color-primary)",
-            "--tw-prose-links": "var(--color-primary)",
-            "--tw-prose-quotes": "var(--color-on-surface-variant)",
-            "--tw-prose-quote-borders": "var(--color-secondary-container)",
-            "--tw-prose-bullets": "var(--color-outline)",
-            "--tw-prose-counters": "var(--color-on-surface-variant)",
-            "--tw-prose-hr": "var(--color-outline-variant)",
+            "--tw-prose-body": "rgb(var(--color-on-surface))",
+            "--tw-prose-headings": "rgb(var(--color-primary))",
+            "--tw-prose-bold": "rgb(var(--color-primary))",
+            "--tw-prose-links": "rgb(var(--color-primary))",
+            "--tw-prose-quotes": "rgb(var(--color-on-surface-variant))",
+            "--tw-prose-quote-borders": "rgb(var(--color-secondary-container))",
+            "--tw-prose-bullets": "rgb(var(--color-outline))",
+            "--tw-prose-counters": "rgb(var(--color-on-surface-variant))",
+            "--tw-prose-hr": "rgb(var(--color-outline-variant))",
             maxWidth: "none",
           },
         },

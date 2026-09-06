@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SectionHeading } from "@/components/marketing/section-heading";
-import { Button, Card, CardBody, Icon, Input, Textarea } from "@/components/ui";
+import { Card, CardBody, Icon } from "@/components/ui";
+import { ContactForm, NewsletterForm } from "@/features/contact/contact-form";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -11,7 +12,7 @@ const channels = [
   { icon: "mail", label: "Email", value: "contact@orient2work.ma" },
   { icon: "call", label: "Téléphone", value: "+212 5 22 00 00 00" },
   { icon: "location_on", label: "Adresse", value: "Casablanca, Maroc" },
-];
+] as const;
 
 export default function ContactPage() {
   return (
@@ -37,25 +38,21 @@ export default function ContactPage() {
               </CardBody>
             </Card>
           ))}
+
+          <Card id="newsletter">
+            <CardBody className="space-y-3">
+              <p className="flex items-center gap-2 font-bold text-primary">
+                <Icon name="notifications_active" className="text-secondary" /> Newsletter
+              </p>
+              <p className="text-sm text-on-surface-variant">
+                Recevez nos nouvelles formations et opportunités.
+              </p>
+              <NewsletterForm />
+            </CardBody>
+          </Card>
         </div>
 
-        <Card className="lg:col-span-2">
-          <CardBody>
-            <form className="grid gap-5 sm:grid-cols-2">
-              <Input label="Nom complet" placeholder="Votre nom" required />
-              <Input label="Email" type="email" placeholder="vous@email.com" required />
-              <Input label="Sujet" placeholder="Objet de votre message" className="sm:col-span-2" />
-              <div className="sm:col-span-2">
-                <Textarea label="Message" placeholder="Votre message…" rows={6} required />
-              </div>
-              <div className="sm:col-span-2">
-                <Button type="submit" size="lg">
-                  Envoyer le message
-                </Button>
-              </div>
-            </form>
-          </CardBody>
-        </Card>
+        <ContactForm />
       </div>
     </div>
   );

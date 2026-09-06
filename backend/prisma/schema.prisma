@@ -1,0 +1,808 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Orient2Work — schéma de données
+//
+// Conventions :
+//  • Clés primaires en UUID (jamais d'entier auto-incrémenté exposé dans les URLs).
+//  • `onDelete: Cascade` quand l'enfant n'a aucun sens sans son parent (expériences
+//    d'un jeune, questions d'un quiz…), `Restrict` quand la suppression doit être
+//    bloquée pour préserver l'historique (entreprise ayant des offres, offre ayant
+//    des candidatures).
+//  • Index sur toutes les colonnes servant aux recherches et aux filtres.
+//  • Les statuts sont des enums PostgreSQL dont les valeurs sont IDENTIQUES aux
+//    littéraux du frontend (src/lib/constants.ts) — aucun mapping nécessaire.
+//  • Type d'opportunité / mode de travail / niveau d'études restent des `String` :
+//    leurs libellés contiennent des accents et des espaces, ils sont validés
+//    strictement par zod (src/domain/enums.ts) et indexés pour les filtres.
+//  • Filière et catégorie de formation, elles, sont des tables à part : elles
+//    s'administrent depuis le back-office (§7.4). La relation garantit qu'un
+//    renommage se propage partout, et `onDelete: Restrict` qu'une entrée utilisée
+//    ne peut pas disparaître sous les enregistrements qui la référencent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  JEUNE
+  ENTREPRISE
+  ADMIN
+}
+
+enum JeuneStatus {
+  inscrit
+  profil_incomplet
+  en_attente_test
+  test_echoue
+  valide
+  suspendu
+}
+
+enum EntrepriseStatus {
+  inscrit
+  attente_contact
+  attente_validation
+  valide
+  refuse
+  suspendu
+}
+
+enum OffreStatus {
+  brouillon
+  attente_validation
+  publiee
+  expiree
+  desactivee
+}
+
+enum EntretienStatus {
+  en_attente
+  accepte
+  refuse
+  annule
+}
+
+enum CandidatureStatus {
+  envoyee
+  vue
+  preselectionnee
+  entretien
+  acceptee
+  refusee
+  retiree
+}
+
+/// Types de questions, calqués sur ce que propose Udemy dans ses quiz.
+enum QuestionType {
+  /// Choix unique parmi plusieurs options.
+  qcm
+  /// Plusieurs bonnes réponses ; la question n'est acquise que si la sélection
+  /// est exactement la bonne (ni oubli, ni option en trop).
+  choix_multiples
+  /// Cas particulier du choix unique, à exactement deux options.
+  vrai_faux
+}
+
+enum DocumentType {
+  CV
+  PHOTO
+  BANNIERE
+  LOGO
+  /// Visuel de couverture d'une formation — le seul type servi publiquement.
+  FORMATION
+  AUTRE
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// ── Identité & sécurité ──────────────────────────────────────────────────────
+
+/// Compte de connexion. Ne contient QUE l'identité : le profil métier vit dans
+/// `Jeune` ou `Entreprise`. Le hash du mot de passe n'est jamais sérialisé (voir
+/// src/mappers/user.mapper.ts).
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique
+  passwordHash    String
+  role            Role
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  jeune         Jeune?
+  entreprise    Entreprise?
+  refreshTokens RefreshToken[]
+  actionTokens  ActionToken[]
+  notifications Notification[]
+  documents     Document[]
+
+  @@index([role])
+  @@index([createdAt])
+  @@map("users")
+}
+
+/// Refresh token à usage unique. Seul le SHA-256 est stocké : une fuite de la base
+/// ne permet pas de rejouer un token. La rotation chaîne les tokens via
+/// `replacedById`, ce qui permet de détecter une réutilisation (vol de cookie) et
+/// de révoquer toute la famille.
+model RefreshToken {
+  id           String        @id @default(uuid()) @db.Uuid
+  tokenHash    String        @unique
+  userId       String        @db.Uuid
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?       @unique @db.Uuid
+  replacedBy   RefreshToken? @relation("TokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces     RefreshToken? @relation("TokenRotation")
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime      @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Token à usage unique : vérification d'email et réinitialisation de mot de passe.
+/// Hashé en base, expiration courte, invalidé après usage.
+model ActionToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  tokenHash String       @unique
+  purpose   TokenPurpose
+  userId    String       @db.Uuid
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("action_tokens")
+}
+
+// ── Profils métier ───────────────────────────────────────────────────────────
+
+model Jeune {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  prenom        String
+  nom           String
+  telephone     String   @default("")
+  ville         String   @default("")
+  photo         String?
+  banniere      String?
+  bio           String?
+  titre         String   @default("")
+  niveauEtudes  String   @default("")
+  etablissement String   @default("")
+  /// Facultative : un jeune s'inscrit avant d'avoir renseigné sa filière.
+  filiereId     String?  @db.Uuid
+  filiere       Filiere? @relation(fields: [filiereId], references: [id], onDelete: Restrict)
+  specialite    String?
+  anneeEtude    String?
+  diplome       String?
+
+  competences String[] @default([])
+  langues     String[] @default([])
+
+  /// Meilleur score (%) au test de validation général.
+  scoreQuiz Int?
+  status    JeuneStatus @default(inscrit)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experiences  Experience[]
+  liens        Lien[]
+  candidatures Candidature[]
+  progressions FormationProgress[]
+  avis         Avis[]
+  votesUtiles  AvisUtile[]
+  entretiens   Entretien[]
+  quizAttempts QuizAttempt[]
+
+  @@index([status])
+  @@index([filiereId])
+  @@index([ville])
+  @@index([nom, prenom])
+  @@map("jeunes")
+}
+
+model Experience {
+  id          String   @id @default(uuid()) @db.Uuid
+  jeuneId     String   @db.Uuid
+  jeune       Jeune    @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  titre       String
+  structure   String
+  periode     String
+  type        String
+  description String   @default("")
+  competences String[] @default([])
+  ordre       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([jeuneId])
+  @@map("experiences")
+}
+
+model Lien {
+  id      String @id @default(uuid()) @db.Uuid
+  jeuneId String @db.Uuid
+  jeune   Jeune  @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  type    String
+  url     String
+
+  @@unique([jeuneId, type, url])
+  @@index([jeuneId])
+  @@map("liens")
+}
+
+model Entreprise {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  nom              String
+  logo             String?
+  secteur          String           @default("")
+  ville            String           @default("")
+  siteWeb          String?
+  description      String           @default("")
+  responsable      String           @default("")
+  emailResponsable String           @default("")
+  telephone        String           @default("")
+  status           EntrepriseStatus @default(inscrit)
+
+  /// Ouvre la prise de rendez-vous spontanée aux jeunes validés (§10).
+  /// Fermé par défaut : une entreprise ne reçoit de demandes que si elle l'a décidé.
+  spontaneeOuverte    Boolean @default(false)
+  /// Durée d'un créneau, en minutes. Découpe les plages des journées ouvertes.
+  creneauDureeMin     Int     @default(30)
+  /// Nombre de semaines ouvertes à la réservation, à partir d'aujourd'hui.
+  reservationSemaines Int     @default(4)
+  /// Message affiché au jeune avant qu'il ne réserve (contexte, consignes).
+  spontaneeMessage    String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offres             Offre[]
+  entretiens         Entretien[]
+  disponibilites DisponibiliteDate[]
+
+  @@index([status])
+  @@index([ville])
+  @@index([secteur])
+  @@map("entreprises")
+}
+
+// ── Offres & candidatures ────────────────────────────────────────────────────
+
+model Offre {
+  id           String     @id @default(uuid()) @db.Uuid
+  entrepriseId String     @db.Uuid
+  /// Restrict : une entreprise ayant publié des offres ne peut pas être supprimée
+  /// sans traitement explicite (préservation de l'historique des candidatures).
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Restrict)
+
+  titre         String
+  /// Libellé de OPPORTUNITY_TYPES.
+  type          String
+  ville         String
+  /// Libellé de WORK_MODES.
+  mode          String
+  niveauDemande String
+  filiereId     String      @db.Uuid
+  filiere       Filiere     @relation(fields: [filiereId], references: [id], onDelete: Restrict)
+  competences   String[]    @default([])
+  description   String
+  dateLimite    DateTime    @db.Date
+  nombrePostes  Int         @default(1)
+  status        OffreStatus @default(brouillon)
+  publieeLe     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidatures Candidature[]
+  entretiens   Entretien[]
+
+  @@index([status])
+  @@index([entrepriseId])
+  @@index([filiereId])
+  @@index([ville])
+  @@index([type])
+  @@index([dateLimite])
+  @@index([status, publieeLe])
+  @@map("offres")
+}
+
+model Candidature {
+  id      String @id @default(uuid()) @db.Uuid
+  jeuneId String @db.Uuid
+  jeune   Jeune  @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  offreId String @db.Uuid
+  /// Restrict : on ne supprime pas une offre qui a reçu des candidatures, on la désactive.
+  offre   Offre  @relation(fields: [offreId], references: [id], onDelete: Restrict)
+
+  status    CandidatureStatus @default(envoyee)
+  message   String?
+  /// CV joint à la candidature.
+  cvId      String?           @db.Uuid
+  cv        Document?         @relation(fields: [cvId], references: [id], onDelete: SetNull)
+  vueLe     DateTime?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  entretiens Entretien[]
+
+  /// Un jeune ne candidate qu'une fois à une même offre.
+  @@unique([jeuneId, offreId])
+  @@index([offreId, status])
+  @@index([jeuneId, status])
+  @@index([createdAt])
+  @@map("candidatures")
+}
+
+// ── Formations (e-learning) ──────────────────────────────────────────────────
+
+/// Catégorie de formation, administrable depuis le back-office (§7.4).
+///
+/// Historiquement figée dans le code, la liste vit désormais en base : l'équipe
+/// OMB peut la faire évoluer sans redéploiement. Le lien depuis `Formation` est
+/// en `Restrict` — supprimer une catégorie encore utilisée est refusé plutôt que
+/// de laisser des formations orphelines.
+model FormationCategorie {
+  id     String  @id @default(uuid()) @db.Uuid
+  nom    String  @unique
+  /// Position d'affichage dans les onglets du catalogue.
+  ordre  Int     @default(0)
+  /// Une catégorie désactivée reste attachée à ses formations mais n'est plus
+  /// proposée à la création.
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  formations Formation[]
+
+  @@index([active, ordre])
+  @@map("formation_categories")
+}
+
+model Formation {
+  id              String             @id @default(uuid()) @db.Uuid
+  titre           String
+  sousTitre       String?
+  description     String
+  categorieId     String             @db.Uuid
+  categorie       FormationCategorie @relation(fields: [categorieId], references: [id], onDelete: Restrict)
+  /// `null` pour une formation commune à toutes les filières.
+  filiereId       String?            @db.Uuid
+  filiere         Filiere?           @relation(fields: [filiereId], references: [id], onDelete: Restrict)
+  /// URL de la couverture, telle qu'exposée aux clients.
+  image           String?
+  /// Fichier téléversé derrière `image`, quand la couverture vient d'un upload.
+  /// Sert au cycle de vie : remplacer ou supprimer la formation efface le fichier.
+  imageDocumentId String?            @unique @db.Uuid
+  imageDocument   Document?          @relation("FormationCouverture", fields: [imageDocumentId], references: [id], onDelete: SetNull)
+  tempsLectureMin Int                @default(10)
+  note            Float?
+  nombreAvis      Int                @default(0)
+  niveau          String?
+  instructeur     String?
+  populaire       Boolean            @default(false)
+  certifiante     Boolean            @default(false)
+  objectifs       String[]           @default([])
+  prerequis       String[]           @default([])
+  /// Corps du cours en HTML (éditeur riche admin) ; les `<h2>` font les chapitres.
+  contenuHtml     String
+  publiee         Boolean            @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quiz         FormationQuiz?
+  progressions FormationProgress[]
+  avis         Avis[]
+
+  @@index([categorieId])
+  @@index([filiereId])
+  @@index([publiee])
+  @@index([populaire])
+  @@map("formations")
+}
+
+model FormationQuiz {
+  id           String    @id @default(uuid()) @db.Uuid
+  formationId  String    @unique @db.Uuid
+  formation    Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+  titre        String
+  description  String    @default("")
+  /// Pourcentage minimum pour valider la formation.
+  scoreMinimum Int       @default(80)
+
+  questions FormationQuizQuestion[]
+
+  @@map("formation_quiz")
+}
+
+model FormationQuizQuestion {
+  id             String        @id @default(uuid()) @db.Uuid
+  quizId         String        @db.Uuid
+  quiz           FormationQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  enonce         String
+  type           QuestionType  @default(qcm)
+  options        String[]
+  /// Index des bonnes options — JAMAIS renvoyés au jeune avant correction.
+  /// Un seul élément pour `qcm` et `vrai_faux`, au moins deux pour
+  /// `choix_multiples` (règle appliquée à la validation).
+  bonnesReponses Int[]
+  explication    String        @default("")
+  chapitre       String?
+  ordre          Int           @default(0)
+
+  @@index([quizId])
+  @@map("formation_quiz_questions")
+}
+
+/// Avancement d'un jeune sur une formation : lecture puis validation par le quiz.
+model FormationProgress {
+  id          String    @id @default(uuid()) @db.Uuid
+  jeuneId     String    @db.Uuid
+  jeune       Jeune     @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  formationId String    @db.Uuid
+  formation   Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+
+  progression   Int       @default(0)
+  lu            Boolean   @default(false)
+  luAt          DateTime?
+  valide        Boolean   @default(false)
+  valideAt      DateTime?
+  meilleurScore Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jeuneId, formationId])
+  @@index([formationId])
+  @@index([jeuneId, valide])
+  @@map("formation_progress")
+}
+
+model Avis {
+  id          String    @id @default(uuid()) @db.Uuid
+  formationId String    @db.Uuid
+  formation   Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+  jeuneId     String    @db.Uuid
+  jeune       Jeune     @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  note        Int
+  commentaire String    @default("")
+  /// Compteur dénormalisé, recalculé depuis `AvisUtile` à chaque vote.
+  utile       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  votesUtiles AvisUtile[]
+
+  /// Un seul avis par jeune et par formation.
+  @@unique([formationId, jeuneId])
+  @@index([formationId, createdAt])
+  @@map("avis")
+}
+
+/// Vote « cet avis m'a été utile ».
+///
+/// Une table de jointure plutôt qu'un simple compteur : sans elle, un même
+/// utilisateur pourrait incrémenter le total autant de fois qu'il le souhaite.
+model AvisUtile {
+  avisId    String   @db.Uuid
+  avis      Avis     @relation(fields: [avisId], references: [id], onDelete: Cascade)
+  jeuneId   String   @db.Uuid
+  jeune     Jeune    @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([avisId, jeuneId])
+  @@index([jeuneId])
+  @@map("avis_utiles")
+}
+
+// ── Test de validation général (§5.3) ────────────────────────────────────────
+
+/// Épreuve qui valide un compte jeune.
+///
+/// UN SEUL test par filière — `filiereId` est unique. Un candidat reçoit le
+/// test de sa filière, ou à défaut le test commun (`filiereId: null`), lui-même
+/// unique par un index partiel posé dans la migration : Postgres autorise
+/// plusieurs `NULL` dans une contrainte d'unicité ordinaire.
+///
+/// Distinct de `FormationQuiz`, qui valide les acquis d'un cours : celui-ci
+/// valide le compte, une seule fois, et ne montre jamais sa correction.
+model Test {
+  id          String   @id @default(uuid()) @db.Uuid
+  titre       String
+  description String   @default("")
+  /// Filière ciblée ; `null` = test commun, servi aux candidats dont la filière
+  /// n'a pas de test à elle.
+  filiereId   String?  @unique @db.Uuid
+  filiere     Filiere? @relation(fields: [filiereId], references: [id], onDelete: Restrict)
+  /// Un test inactif n'est plus servi ; les tentatives passées sont conservées.
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions QuizQuestion[]
+
+  @@map("tests")
+}
+
+/// Question d'un test de validation. Table historique `quiz_questions`.
+model QuizQuestion {
+  id             String       @id @default(uuid()) @db.Uuid
+  testId         String       @db.Uuid
+  test           Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  enonce         String
+  type           QuestionType @default(qcm)
+  options        String[]
+  /// Index des bonnes options — voir `FormationQuizQuestion.bonnesReponses`.
+  bonnesReponses Int[]
+  /// Une question désactivée n'est plus servie ni corrigée.
+  active         Boolean      @default(true)
+  ordre          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([testId, active])
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  jeuneId   String   @db.Uuid
+  jeune     Jeune    @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  score     Int
+  reussi    Boolean
+  /// Détail des réponses : { questionId: indexChoisi }.
+  reponses  Json
+  createdAt DateTime @default(now())
+
+  @@index([jeuneId, createdAt])
+  @@map("quiz_attempts")
+}
+
+// ── Entretiens ───────────────────────────────────────────────────────────────
+
+model Entretien {
+  id            String       @id @default(uuid()) @db.Uuid
+  jeuneId       String       @db.Uuid
+  jeune         Jeune        @relation(fields: [jeuneId], references: [id], onDelete: Cascade)
+  entrepriseId  String       @db.Uuid
+  entreprise    Entreprise   @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+  offreId       String?      @db.Uuid
+  offre         Offre?       @relation(fields: [offreId], references: [id], onDelete: SetNull)
+  candidatureId String?      @db.Uuid
+  candidature   Candidature? @relation(fields: [candidatureId], references: [id], onDelete: SetNull)
+
+  /// Titre figé au moment de la demande (l'offre peut évoluer ou disparaître).
+  offreTitre  String
+  date        DateTime        @db.Date
+  heure       String
+  status      EntretienStatus @default(en_attente)
+  lienReunion String?
+  commentaire String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Issu d'une candidature spontanée : le jeune a réservé un créneau sans
+  /// passer par une offre. Distingue ces demandes de celles nées d'une
+  /// candidature, qui suivent le même cycle de vie ensuite.
+  spontanee Boolean @default(false)
+
+  /// Instant d'envoi du rappel « dans 1 heure ».
+  /// Sert de VERROU : la colonne n'est posée qu'une fois, ce qui évite qu'un
+  /// second passage du planificateur — ou une seconde instance de l'API —
+  /// renvoie le même rappel.
+  rappelEnvoyeAt DateTime?
+
+  @@index([jeuneId, status])
+  @@index([entrepriseId, status])
+  @@index([date])
+  /// Sert au calcul des créneaux libres : on interroge les entretiens d'une
+  /// entreprise sur une plage de dates à chaque affichage du calendrier.
+  @@index([entrepriseId, date])
+  /// Balayage du planificateur de rappels : entretiens confirmés, non encore
+  /// rappelés, sur une plage de dates courte.
+  @@index([status, rappelEnvoyeAt, date])
+  @@map("entretiens")
+}
+
+/**
+ * Plage horaire ouverte à la réservation, pour une DATE précise.
+ * Modèle DATÉ, à la façon du calendrier de réservation de Calendly :
+ * l'entreprise ouvre les journées qu'elle choisit — le 12 mars de 9h à 12h — et
+ * les créneaux réservables en sont CALCULÉS (voir `domain/disponibilites.ts`).
+ * Stocker chaque créneau obligerait à les régénérer au moindre changement.
+ * Une ligne = UNE plage. Plusieurs lignes pour une même date décrivent une
+ * journée coupée par le déjeuner — « 9h-12h » puis « 14h-17h ». Elles ne
+ * doivent pas se chevaucher, ce que le service vérifie.
+ * Une date absente n'est pas réservable : il n'existe donc pas de journée
+ * « fermée » à représenter, on retire simplement ses lignes.
+ */
+model DisponibiliteDate {
+  id           String     @id @default(uuid()) @db.Uuid
+  entrepriseId String     @db.Uuid
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  /// Jour concerné, à minuit UTC (même convention que `Entretien.date`).
+  date DateTime @db.Date
+  /// Bornes locales « HH:MM » de la plage ouverte ce jour-là.
+  debut String
+  fin   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entrepriseId, date])
+  @@map("disponibilites_dates")
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icon      String   @default("notifications")
+  title     String
+  detail    String?
+  href      String?
+  read      Boolean  @default(false)
+  accent    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ── Référentiels administrables (§7.4) ───────────────────────────────────────
+
+/// Filière / domaine, partagé par les jeunes, les offres, les formations et les
+/// questions du test.
+///
+/// Référencée par quatre tables : renommer une filière ne doit pas laisser
+/// d'enregistrement pointant sur l'ancien libellé, d'où la clé étrangère plutôt
+/// qu'une simple colonne texte.
+model Filiere {
+  id        String   @id @default(uuid()) @db.Uuid
+  nom       String   @unique
+  /// Position d'affichage dans les listes déroulantes.
+  ordre     Int      @default(0)
+  /// Une filière désactivée reste attachée à l'existant mais n'est plus proposée.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jeunes     Jeune[]
+  offres     Offre[]
+  formations Formation[]
+  /// Au plus un — la contrainte d'unicité vit sur `Test.filiereId`.
+  test       Test?
+
+  @@index([active, ordre])
+  @@map("filieres")
+}
+
+// ── Contact & newsletter ─────────────────────────────────────────────────────
+
+/// Message envoyé depuis le formulaire de contact public.
+///
+/// Aucun compte n'est requis : la route est publique, donc fortement limitée en
+/// débit et le contenu est assaini avant persistance (le champ est réaffiché
+/// tel quel dans l'espace admin).
+model ContactMessage {
+  id        String    @id @default(uuid()) @db.Uuid
+  nom       String
+  email     String
+  sujet     String
+  message   String
+  /// Traité par l'équipe OMB.
+  traite    Boolean   @default(false)
+  traiteAt  DateTime?
+  /// Conservée pour tracer un éventuel abus ; jamais exposée par l'API.
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  @@index([traite, createdAt])
+  @@map("contact_messages")
+}
+
+/// Inscription à la newsletter.
+///
+/// Le jeton de désinscription est stocké haché : le lien envoyé par email est
+/// la seule façon de se désinscrire, ce qui empêche de désinscrire autrui en
+/// devinant simplement son adresse.
+model NewsletterSubscription {
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique
+  active               Boolean   @default(true)
+  unsubscribeTokenHash String    @unique
+  createdAt            DateTime  @default(now())
+  unsubscribedAt       DateTime?
+
+  @@index([active])
+  @@map("newsletter_subscriptions")
+}
+
+// ── Fichiers ─────────────────────────────────────────────────────────────────
+
+/// Métadonnées d'un fichier uploadé. Le binaire est stocké hors du répertoire
+/// servi statiquement, sous un nom généré ; il n'est accessible que via un
+/// contrôleur qui vérifie les droits.
+model Document {
+  id         String       @id @default(uuid()) @db.Uuid
+  ownerId    String       @db.Uuid
+  owner      User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  type       DocumentType
+  /// Nom d'origine, assaini — sert uniquement à l'affichage et au téléchargement.
+  filename   String
+  /// Nom aléatoire sur disque (jamais dérivé de l'entrée utilisateur).
+  storedName String       @unique
+  mimeType   String
+  size       Int
+  createdAt  DateTime     @default(now())
+
+  candidatures        Candidature[]
+  formationCouverture Formation?    @relation("FormationCouverture")
+
+  @@index([ownerId, type])
+  @@map("documents")
+}
+
+/**
+ * Question fréquente affichée sur la page d'accueil.
+ *
+ * Administrable de bout en bout : le contenu d'une FAQ évolue au rythme des
+ * questions réellement posées au support, pas au rythme des déploiements.
+ * Le figer dans le code obligerait à livrer pour corriger une formulation.
+ *
+ * `publiee` plutôt qu'une suppression : une question retirée de la vitrine est
+ * presque toujours une question qu'on remettra, ou dont on veut garder la
+ * rédaction. La suppression définitive reste possible, elle est simplement
+ * distincte du masquage.
+ */
+model Faq {
+  id       String  @id @default(uuid()) @db.Uuid
+  question String
+  /// Réponse en texte simple : la page d'accueil n'a pas besoin de mise en
+  /// forme riche, et du HTML libre ici ouvrirait une surface d'injection pour
+  /// un gain nul.
+  reponse  String
+  /// Position d'affichage ; les questions les plus fréquentes en premier.
+  ordre    Int     @default(0)
+  publiee  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Sert la lecture publique : filtrer sur `publiee` puis trier sur `ordre`.
+  @@index([publiee, ordre])
+  @@map("faq")
+}
