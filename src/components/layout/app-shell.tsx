@@ -3,8 +3,16 @@
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "./logo";
 import { Avatar, Icon, RetourEnHaut } from "@/components/ui";
+import {
+  COURBE_SORTIE,
+  DUREE_FEUILLE,
+  DUREE_PANNEAU,
+  DUREE_VOILE,
+  useTransitionUI,
+} from "@/components/motion/transitions";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { isNavGroup, type NavEntry, type NavGroup, type NavItem } from "@/lib/navigation";
 import { useDefilement } from "@/lib/use-defilement";
@@ -286,6 +294,12 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [reduite, setReduite] = useState(false);
 
+  // Mêmes cadences que la feuille « Plus » de l'Espace Jeune : un tiroir
+  // traverse autant d'écran qu'une feuille, il prend donc son temps.
+  const transitionTiroir = useTransitionUI(DUREE_FEUILLE);
+  const transitionTiroirSortie = useTransitionUI(DUREE_PANNEAU, COURBE_SORTIE);
+  const transitionVoile = useTransitionUI(DUREE_VOILE);
+
   // L'en-tête ne gagne son ombre qu'une fois du contenu passé dessous : en haut
   // de page, il n'y a rien à séparer.
   const defile = useDefilement(8);
@@ -395,15 +409,40 @@ export function AppShell({
         {barre(reduite)}
       </aside>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-primary/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto bg-surface-container-lowest px-3 py-2 shadow-level-2">
-            {barre(false)}
-          </aside>
-        </div>
-      )}
+      {/*
+        Tiroir mobile.
+
+        Il SORT du bord gauche — là où vit la barre sur grand écran — et y
+        retourne. Il apparaissait jusqu'ici d'un bloc, voile compris : rien ne
+        disait d'où venait ce panneau ni par où il repartirait, et la fermeture
+        était un simple escamotage.
+
+        `AnimatePresence` entoure le conteneur : sans lui, `mobileOpen` à faux
+        démonterait le tiroir avant qu'il ait pu repartir. Le voile se fond à
+        part, sans glisser avec le tiroir — sinon il découvrirait la page par
+        la gauche, comme un rideau qu'on tire.
+      */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <div key="tiroir-mobile" className="fixed inset-0 z-50 lg:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: transitionVoile }}
+              exit={{ opacity: 0, transition: transitionVoile }}
+              className="absolute inset-0 bg-primary/40 backdrop-blur-sm"
+              onClick={() => setMobileOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0, transition: transitionTiroir }}
+              exit={{ x: "-100%", transition: transitionTiroirSortie }}
+              className="absolute inset-y-0 left-0 w-64 overflow-y-auto bg-surface-container-lowest px-3 py-2 shadow-level-2"
+            >
+              {barre(false)}
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/*
         Le décalage du contenu suit la barre au pixel près, et par une variable

@@ -44,7 +44,9 @@ const forumPhases = [
 export default function AProposPage() {
   return (
     <>
-      <section className="bg-surface-container py-20">
+      {/* Remonte sous l'en-tête sans fond : le lavis court jusqu'au haut de la
+          fenêtre au lieu de laisser une bande de fond de page au-dessus. */}
+      <section className="-mt-20 bg-surface-container pb-20 pt-40">
         <div className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop">
           <SectionHeading eyebrow="À propos" title={APP_TAGLINE} centered className="mb-6" />
           <p className="mx-auto max-w-3xl text-center text-lg text-on-surface-variant">

@@ -19,7 +19,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, Icon } from "@/components/ui";
+import { COURBE_SORTIE, DUREE_MENU, useTransitionUI } from "@/components/motion/transitions";
 import { api } from "@/lib/api";
 import { DELAI_SUGGESTIONS_MS, useDebounced } from "@/lib/use-debounced";
 import type { ApiRecherche, ApiResultatRecherche, TypeResultat } from "@/lib/api/types";
@@ -166,6 +168,17 @@ export function RechercheNavbar({ autoFocus, onNavigated }: Props) {
 
   const afficherPanneau = ouvert && saisie.length >= LONGUEUR_MINIMALE;
 
+  /*
+   * La liste de suggestions se pose SOUS le champ, et repart par le même
+   * chemin. Elle apparaissait et disparaissait d'une image à l'autre : entre
+   * deux frappes qui font passer la saisie sous le seuil, l'écran clignotait.
+   *
+   * Course volontairement courte (`y: -4`) : ce panneau suit la frappe, et un
+   * mouvement ample le mettrait en retard sur elle.
+   */
+  const transitionListe = useTransitionUI(DUREE_MENU);
+  const transitionListeSortie = useTransitionUI(DUREE_MENU, COURBE_SORTIE);
+
   return (
     <div className="relative">
       <form role="search" onSubmit={soumettre}>
@@ -198,24 +211,44 @@ export function RechercheNavbar({ autoFocus, onNavigated }: Props) {
         />
       </form>
 
+      {/* Le voile de fermeture n'est PAS animé : invisible, il n'a rien à
+          montrer, et le laisser sortir en même temps que la liste le
+          maintiendrait à capter les clics une fraction de seconde de trop. */}
       {afficherPanneau && (
-        <>
-          {/* Fermeture au clic extérieur, sans écouteur global sur le document. */}
-          <button
-            type="button"
-            aria-hidden
-            tabIndex={-1}
-            onMouseDown={fermer}
-            className="fixed inset-0 z-40 cursor-default"
-          />
+        <button
+          type="button"
+          aria-hidden
+          tabIndex={-1}
+          onMouseDown={fermer}
+          className="fixed inset-0 z-40 cursor-default"
+        />
+      )}
 
-          <div
+      <AnimatePresence>
+        {afficherPanneau && (
+          <motion.div
             id={listeId}
             role="listbox"
             aria-label="Résultats de recherche"
-            /* Sur mobile le panneau prend toute la largeur : ancré à droite et
-               large de 320 px, il dépasserait du cadre sur les petits écrans. */
-            className="fixed inset-x-2 top-14 z-50 max-h-[70vh] overflow-y-auto overscroll-contain rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2 md:absolute md:inset-x-0 md:top-[calc(100%+0.5rem)] md:max-h-96"
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: transitionListe }}
+            exit={{ opacity: 0, y: -4, scale: 0.98, transition: transitionListeSortie }}
+            /*
+             * Sur mobile le panneau prend toute la largeur : ancré à droite et
+             * large de 320 px, il dépasserait du cadre sur les petits écrans.
+             *
+             * `fixed` et non `absolute` : la barre de recherche dépliée vit
+             * dans une enveloppe `overflow-hidden` — c'est elle qui permet
+             * d'animer sa hauteur — et un panneau positionné dans le flux y
+             * serait rogné à ras du champ.
+             *
+             * D'où ce décalage vertical explicite, `top-14` ne convenant pas :
+             * il place le panneau sous l'EN-TÊTE (56 px), donc par-dessus le
+             * champ de saisie déplié, qui occupe les 61 px suivants — on
+             * cherchait à l'aveugle, la liste masquant ce qu'on tapait.
+             * 120 px = en-tête + filet + champ, avec le jeu qu'il faut.
+             */
+            className="fixed inset-x-2 top-[7.5rem] z-50 max-h-[70vh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2 md:absolute md:inset-x-0 md:top-[calc(100%+0.5rem)] md:max-h-96"
           >
             <Panneau
               resultats={resultats}
@@ -231,9 +264,9 @@ export function RechercheNavbar({ autoFocus, onNavigated }: Props) {
               listeId={listeId}
               onAller={aller}
             />
-          </div>
-        </>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

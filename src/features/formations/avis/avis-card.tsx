@@ -22,7 +22,16 @@ interface AvisCardProps {
 /** A single learner review. */
 export function AvisCard({ avis, isMine, helpful, onToggleHelpful }: AvisCardProps) {
   return (
-    <article className="flex gap-4 border-b border-outline-variant py-5 last:border-0">
+    /*
+     * Pas de séparateur ICI.
+     *
+     * L'article portait `border-b … last:border-0`. Chaque carte étant
+     * maintenant enveloppée pour être animée, elle est SEULE dans son
+     * enveloppe : `:last-child` était donc vrai pour toutes, et le trait
+     * disparaissait entre tous les avis. Le filet appartient désormais à la
+     * liste (`divide-y`), qui est le seul niveau à savoir ce qui se suit.
+     */
+    <article className="flex gap-4 py-5">
       <Avatar src={avis.auteurPhoto} alt={avis.auteurNom} size={44} />
 
       <div className="min-w-0 flex-1 space-y-1.5">

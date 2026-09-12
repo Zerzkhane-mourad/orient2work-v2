@@ -75,14 +75,18 @@ export function ProfileSummaryCard() {
 
       {/* Quick stats */}
       <div className="border-t border-outline-variant px-4 py-3">
+        {/* `min-h-11` : c'est un lien, et sur mobile cette carte descend en bas
+            de page où on l'atteint au pouce. Deux lignes de 16 px de haut se
+            manquent — et l'on touche la statistique voisine, qui n'en est pas
+            un lien. */}
         <Link
           href="/espace-jeune/candidatures"
-          className="flex items-center justify-between text-xs text-on-surface-variant hover:text-primary"
+          className="flex min-h-11 items-center justify-between gap-2 text-xs text-on-surface-variant hover:text-primary"
         >
           <span>Candidatures envoyées</span>
           <span className="font-bold text-primary">{jeune.candidatures}</span>
         </Link>
-        <div className="mt-2 flex items-center justify-between text-xs text-on-surface-variant">
+        <div className="flex min-h-8 items-center justify-between gap-2 text-xs text-on-surface-variant">
           <span>Vues du profil cette semaine</span>
           <span className="font-bold text-secondary">27</span>
         </div>
@@ -94,7 +98,7 @@ export function ProfileSummaryCard() {
           <Link
             key={l.href}
             href={l.href}
-            className="flex items-center gap-3 px-4 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
+            className="flex min-h-11 items-center gap-3 px-4 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
           >
             <Icon name={l.icon} className="text-[18px]" /> {l.label}
           </Link>

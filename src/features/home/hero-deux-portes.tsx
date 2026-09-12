@@ -141,21 +141,19 @@ export function HeroDeuxPortes({ temoignage }: { temoignage?: ApiTemoignage }) {
   return (
     /*
      * Deux couches : le fond de page, puis la scène encastrée. La marge du
-     * cadre est plus étroite sur mobile, où chaque pixel de largeur compte.
-     */
-    /*
-     * Le sol du cadre passe de `surface-container` à `background`.
+     * cadre est plus étroite sur mobile, où chaque pixel de largeur compte. Le
+     * sol du cadre est `background`, le même fond que le reste de la page.
      *
-     * L'en-tête n'a plus de filet de séparation ; il se posait donc sur un fond
-     * (#f9f9ff) qui rencontrait celui du héros (#e7eeff) en une marche de ton
-     * sans rien pour la justifier — une couture qui se lisait comme un défaut
-     * d'assemblage. Les deux surfaces sont désormais la MÊME, et l'en-tête se
-     * confond avec le sol sur lequel repose le panneau navy.
+     * `-mt-20` : le héros remonte SOUS l'en-tête, qui n'a plus de fond. Le
+     * panneau navy commence donc à 8 px du haut de la fenêtre, et la barre de
+     * navigation se pose dans son arrondi, comme sa première ligne — au lieu
+     * d'une bande claire posée au-dessus. Les 80 px repris ici sont rendus au
+     * retrait haut du contenu, plus bas.
      *
-     * Le panneau ne perd rien : c'est son navy contre le presque-blanc qui le
-     * fait exister, pas la nuance du liseré autour.
+     * `data-heros-sombre` fait passer l'en-tête en ton clair tant qu'il est
+     * posé sur ce panneau (voir `PublicHeader`).
      */
-    <section className="bg-background px-2 pb-2 pt-2 sm:px-4 sm:pb-4">
+    <section data-heros-sombre="" className="-mt-20 bg-background px-2 pb-2 pt-2 sm:px-4 sm:pb-4">
       {/*
         `champ-heros` : lueur or derrière le titre, sol assombri sous les
         portes. Aucun motif — voir la construction et les mesures de contraste
@@ -166,7 +164,9 @@ export function HeroDeuxPortes({ temoignage }: { temoignage?: ApiTemoignage }) {
         mécanique du héros pris en modèle, sans sa séquence d'images.
       */}
       <SceneScrub className="champ-heros relative overflow-hidden rounded-xl text-white sm:rounded-[1.75rem]">
-        <div className="relative mx-auto max-w-container-max px-margin-mobile pb-12 pt-16 lg:px-margin-desktop lg:pb-16 lg:pt-24">
+        {/* Retrait haut : les 64 / 96 px d'origine, plus les 80 px de la barre
+            qui occupe désormais le haut du panneau. */}
+        <div className="relative mx-auto max-w-container-max px-margin-mobile pb-12 pt-36 lg:px-margin-desktop lg:pb-16 lg:pt-44">
           <div className="relative mx-auto max-w-3xl text-center">
             {/* Gauche : la preuve sociale, en amorce. */}
             {temoignage && (

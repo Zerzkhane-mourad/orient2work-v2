@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Button,
   Card,
@@ -14,6 +15,12 @@ import {
   StarRatingInput,
   Textarea,
 } from "@/components/ui";
+import {
+  COURBE_SORTIE,
+  DUREE_MENU,
+  DUREE_PANNEAU,
+  useTransitionUI,
+} from "@/components/motion/transitions";
 import { useProfileOptional } from "@/features/jeune/profil/profile-store";
 import { api } from "@/lib/api";
 import { toAvis } from "@/lib/api/adapters";
@@ -55,6 +62,9 @@ export function AvisSection({ formationId, canReview }: AvisSectionProps) {
   const save = useMutation(api.formations.saveAvis);
   const remove = useMutation(api.formations.removeAvis);
   const vote = useMutation(api.formations.toggleAvisUtile);
+
+  const transitionAvis = useTransitionUI(DUREE_PANNEAU);
+  const transitionAvisSortie = useTransitionUI(DUREE_MENU, COURBE_SORTIE);
 
   const all = useMemo(() => (data?.items ?? []).map(toAvis), [data]);
   const mesVotes = data?.mesVotes ?? [];
@@ -124,7 +134,20 @@ export function AvisSection({ formationId, canReview }: AvisSectionProps) {
     });
   };
 
-  if (loading) {
+  /*
+   * Squelette au PREMIER chargement seulement.
+   *
+   * `refetch()` remet `loading` à vrai. Sur `loading` seul, publier ou
+   * supprimer son avis faisait donc disparaître tout le bloc — synthèse,
+   * filtres, liste — au profit de six lignes grises, avant qu'il ne se
+   * reconstruise : on ne voyait jamais son propre avis apparaître, seulement
+   * la page clignoter. C'est exactement ce qui avait été corrigé pour le vote
+   * « utile » plus bas, sans l'être ici.
+   *
+   * `data` déjà en mémoire, on garde donc l'affichage en place pendant le
+   * rechargement : l'ancienne liste reste lisible jusqu'à la nouvelle.
+   */
+  if (loading && !data) {
     return (
       <Card>
         <CardBody className="space-y-4">
@@ -170,7 +193,27 @@ export function AvisSection({ formationId, canReview }: AvisSectionProps) {
           )}
         </div>
 
-        {actionError && <ErrorBanner error={actionError} />}
+        {/*
+          Le message d'échec se DÉPLIE.
+
+          Il s'insérait d'un coup entre le titre et la liste, poussant tout le
+          bloc vers le bas : le regard, resté sur le bouton « Publier », suivait
+          le décalage sans savoir ce qui venait d'apparaître. La hauteur animée
+          fait le lien entre l'action refusée et sa raison.
+        */}
+        <AnimatePresence initial={false}>
+          {actionError && (
+            <motion.div
+              key="erreur-action"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1, transition: transitionAvis }}
+              exit={{ height: 0, opacity: 0, transition: transitionAvisSortie }}
+              className="overflow-hidden"
+            >
+              <ErrorBanner error={actionError} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {all.length === 0 ? (
           <EmptyState
@@ -200,23 +243,47 @@ export function AvisSection({ formationId, canReview }: AvisSectionProps) {
               }}
             />
 
-            <div className="border-t border-outline-variant">
+            {/*
+              `divide-y` sur la LISTE, et non une bordure par carte : voir
+              `avis-card.tsx`. C'est aussi ce qui garde les filets justes
+              pendant qu'un avis entre ou sort.
+            */}
+            <div className="divide-y divide-outline-variant border-t border-outline-variant">
               {filtered.length === 0 ? (
                 <p className="py-8 text-center text-sm text-on-surface-variant">
                   Aucun avis avec cette note.
                 </p>
               ) : (
-                filtered
-                  .slice(0, visible)
-                  .map((a) => (
-                    <AvisCard
+                /*
+                  Les avis entrent et sortent, et les voisins se replacent.
+
+                  C'est ce qui rend le dépôt d'un avis VISIBLE : jusqu'ici la
+                  liste était remplacée d'un bloc, et l'on ne savait pas si son
+                  propre avis venait d'être ajouté, modifié, ou rien du tout.
+                  Le même mouvement sert au filtre par note — on voit la liste
+                  se réduire, au lieu d'en découvrir une autre.
+
+                  `initial={false}` : la première liste est déjà là au montage,
+                  elle n'a pas à se jouer une entrée que personne n'a demandée.
+                */
+                <AnimatePresence initial={false}>
+                  {filtered.slice(0, visible).map((a) => (
+                    <motion.div
                       key={a.id}
-                      avis={a}
-                      isMine={a.id === mine?.id}
-                      helpful={mesVotes.includes(a.id)}
-                      onToggleHelpful={() => void toggleHelpful(a.id)}
-                    />
-                  ))
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0, transition: transitionAvis }}
+                      exit={{ opacity: 0, y: -8, transition: transitionAvisSortie }}
+                    >
+                      <AvisCard
+                        avis={a}
+                        isMine={a.id === mine?.id}
+                        helpful={mesVotes.includes(a.id)}
+                        onToggleHelpful={() => void toggleHelpful(a.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               )}
             </div>
 

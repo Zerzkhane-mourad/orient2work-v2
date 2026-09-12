@@ -108,7 +108,9 @@ export default function JeunesPage() {
         contenu flotte à mi-hauteur et se lit comme un défaut de mise en page,
         pas comme de l'espace voulu.
       */}
-      <section className="bg-surface-container-low py-20 lg:py-24">
+      {/* Remonte sous l'en-tête sans fond : le lavis court jusqu'au haut de la
+          fenêtre au lieu de laisser une bande de fond de page au-dessus. */}
+      <section className="-mt-20 bg-surface-container-low pb-20 pt-40 lg:pb-24 lg:pt-44">
         <Reveal
           auChargement
           className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop"

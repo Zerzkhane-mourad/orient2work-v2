@@ -101,8 +101,30 @@ export function ExperienceSection() {
     setOpen(false);
   };
 
+  /*
+   * Confirmation dans une `Modal`, et non `window.confirm`.
+   *
+   * La boîte native du navigateur ne s'anime pas, ne suit ni la marque ni la
+   * langue de l'interface (ses boutons sont ceux du système), et fige toute la
+   * page tant qu'elle est ouverte. C'était la seule surface modale de
+   * l'application qui échappait au composant commun.
+   */
+  const [aSupprimer, setASupprimer] = useState<Experience | null>(null);
+  /*
+   * Ouverture tenue À PART de l'expérience visée : fermer ne remet pas
+   * `aSupprimer` à zéro. La modale repart donc avec son texte au lieu de se
+   * vider pendant qu'elle glisse hors de l'écran.
+   */
+  const [confirmationOuverte, setConfirmationOuverte] = useState(false);
+
   const confirmRemove = (exp: Experience) => {
-    if (window.confirm(`Supprimer l'expérience « ${exp.titre} » ?`)) removeExperience(exp.id);
+    setASupprimer(exp);
+    setConfirmationOuverte(true);
+  };
+
+  const supprimer = () => {
+    if (aSupprimer) removeExperience(aSupprimer.id);
+    setConfirmationOuverte(false);
   };
 
   return (
@@ -237,6 +259,27 @@ export function ExperienceSection() {
             />
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={confirmationOuverte}
+        onClose={() => setConfirmationOuverte(false)}
+        title="Supprimer l'expérience"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmationOuverte(false)}>
+              Annuler
+            </Button>
+            <Button variant="danger" onClick={supprimer}>
+              Supprimer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-on-surface-variant">
+          L&apos;expérience « <strong className="text-primary">{aSupprimer?.titre}</strong> »
+          sera retirée de votre profil.
+        </p>
       </Modal>
     </>
   );

@@ -498,6 +498,74 @@
   }
 
   /*
+   * En-tête public posé sur un héros SOMBRE : texte clair, capsule en vitre.
+   *
+   * L'en-tête n'a pas de fond, il se fond dans le héros qu'il recouvre. Sur un
+   * héros navy (accueil, entreprises), son texte doit donc passer en clair.
+   *
+   * La condition, répétée en tête de chaque règle :
+   *
+   *  • `html:has([data-heros-sombre])` — la page porte un héros sombre. Lu par
+   *    le navigateur dès le premier affichage, AVANT toute hydratation : le
+   *    logo ne clignote jamais en navy sur fond navy le temps que le script
+   *    arrive.
+   *  • `:not([data-sur-heros="non"])` — l'en-tête ne l'a pas encore quitté.
+   *    L'attribut est posé par l'`IntersectionObserver` de `PublicHeader` une
+   *    fois le héros sorti de sous la barre ; absent, il laisse la première
+   *    condition décider seule.
+   *
+   * Écrit ICI, et non en variante Tailwind déclarée dans `tailwind.config.ts` :
+   * le serveur de développement recharge ce fichier à chaud, alors qu'une
+   * modification de la configuration exige de le redémarrer. Déclarée là-bas,
+   * la variante laissait le logo en navy tant que personne n'y pensait.
+   *
+   * Contrastes sur la vitre navy : blanc 16:1, blanc à 75-80 % un peu plus de
+   * 9:1, or clair 8,5:1. L'or FONCÉ de la page courante (#735c00) y tomberait
+   * sous 2:1 — d'où la bascule vers l'or clair.
+   */
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-logo {
+    color: rgb(255 255 255);
+  }
+
+  /* Pleine et blanche, la capsule aurait été la surface la plus claire de
+     l'écran, posée juste au-dessus du titre qu'elle doit laisser dominer. */
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-capsule {
+    background-color: rgb(255 255 255 / 0.1);
+    border-color: rgb(255 255 255 / 0.2);
+    box-shadow: none;
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-lien {
+    color: rgb(255 255 255 / 0.75);
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-lien:hover,
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-menu {
+    color: rgb(255 255 255);
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-lien[aria-current="page"] {
+    color: rgb(var(--color-secondary-fixed-dim));
+  }
+
+  /* Le filet suit l'or clair : l'or foncé disparaîtrait sur la vitre. */
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-lien .lien-nav-texte::after {
+    background-color: rgb(var(--color-secondary-fixed-dim));
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-connexion {
+    color: rgb(255 255 255 / 0.8);
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-connexion:hover {
+    color: rgb(255 255 255);
+  }
+
+  html:has([data-heros-sombre]) [data-entete]:not([data-sur-heros="non"]) .entete-menu:hover {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+
+  /*
    * Champ lumineux du héros.
    *
    * ── Le problème ─────────────────────────────────────────────────────────

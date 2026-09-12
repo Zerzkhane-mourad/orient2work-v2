@@ -16,7 +16,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, Icon, RetourEnHaut } from "@/components/ui";
+import {
+  COURBE_SORTIE,
+  DUREE_MENU,
+  DUREE_PANNEAU,
+  DUREE_VOILE,
+  useTransitionUI,
+} from "@/components/motion/transitions";
 import { Logo } from "./logo";
 import { JeuneBottomNav } from "./jeune-bottom-nav";
 import { estActif, estImmersif, NAV_COMPTE, NAV_DESKTOP } from "./jeune-nav";
@@ -46,6 +54,16 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
    * en haut de page, il n'y a rien à séparer.
    */
   const defile = useDefilement(8);
+
+  /*
+   * Trois cadences, une seule source (`motion/transitions`) : le filet qui
+   * suit l'onglet actif, les menus ancrés sous leur bouton, et la recherche
+   * dépliée qui pousse le contenu de la page.
+   */
+  const transitionFilet = useTransitionUI(DUREE_VOILE);
+  const transitionMenu = useTransitionUI(DUREE_MENU);
+  const transitionPanneau = useTransitionUI(DUREE_PANNEAU);
+  const transitionPanneauSortie = useTransitionUI(DUREE_MENU, COURBE_SORTIE);
 
   // Les panneaux se referment au changement de page : ils resteraient sinon
   // ouverts par-dessus la destination que l'on vient d'atteindre.
@@ -91,8 +109,16 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
                 >
                   <Icon name={item.icon} filled={actif} className="text-2xl" />
                   <span>{item.court ?? item.label}</span>
+                  {/* Un seul filet pour toute la barre (`layoutId`) : il GLISSE
+                      d'un onglet à l'autre au lieu de s'éteindre ici pour se
+                      rallumer là. C'est ce qui relie la page quittée à celle
+                      qu'on ouvre. */}
                   {actif && (
-                    <span className="absolute -bottom-px h-0.5 w-full rounded-full bg-secondary" />
+                    <motion.span
+                      layoutId="onglet-actif-desktop"
+                      transition={transitionFilet}
+                      className="absolute -bottom-px h-0.5 w-full rounded-full bg-secondary"
+                    />
                   )}
                 </Link>
               );
@@ -107,7 +133,29 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
               aria-label="Rechercher une offre"
               className="flex min-h-11 min-w-11 items-center justify-center text-on-surface-variant hover:text-primary md:hidden"
             >
-              <Icon name={rechercheOuverte ? "close" : "search"} className="text-2xl" />
+              {/*
+                Loupe et croix se relaient dans un quart de tour.
+
+                Elles se remplaçaient d'une image à l'autre : au moment même où
+                le champ commence à se déplier, l'icône avait déjà changé — deux
+                gestes sans rapport pour un seul appui. La rotation les tient
+                ensemble, et la boîte de taille fixe empêche la barre de sauter
+                pendant le croisement.
+              */}
+              <span className="relative flex h-6 w-6 items-center justify-center">
+                <AnimatePresence initial={false} mode="popLayout">
+                  <motion.span
+                    key={rechercheOuverte ? "fermer" : "chercher"}
+                    initial={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                    transition={transitionMenu}
+                    className="absolute inset-0 flex items-center justify-center"
+                  >
+                    <Icon name={rechercheOuverte ? "close" : "search"} className="text-2xl" />
+                  </motion.span>
+                </AnimatePresence>
+              </span>
             </button>
 
             <PanneauNotifications
@@ -136,14 +184,38 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
               >
                 <Avatar src={jeune.photo} alt={`${jeune.prenom} ${jeune.nom}`} size={24} />
                 <span className="hidden items-center gap-0.5 sm:flex">
-                  Moi <Icon name="chevron_right" className="rotate-90 text-[14px]" />
+                  Moi{" "}
+                  {/* Le chevron pointe vers le bas au repos, vers le haut une
+                      fois le menu ouvert : il dit dans quel sens va le geste. */}
+                  <motion.span
+                    animate={{ rotate: meOpen ? 270 : 90 }}
+                    transition={transitionMenu}
+                    className="block"
+                  >
+                    <Icon name="chevron_right" className="block text-[14px]" />
+                  </motion.span>
                 </span>
               </button>
 
+              {/* Capteur de clic hors du menu — hors `AnimatePresence` : il est
+                  invisible, il n'a donc rien à animer, et le faire sortir avec
+                  le menu le laisserait avaler les clics une fraction de seconde
+                  après sa fermeture. */}
               {meOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMeOpen(false)} />
-                  <div className="absolute right-0 top-14 z-50 w-64 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2">
+                <div className="fixed inset-0 z-40" onClick={() => setMeOpen(false)} />
+              )}
+
+              <AnimatePresence>
+                {meOpen && (
+                  /* `origin-top-right` : le menu se déploie DEPUIS son bouton,
+                     au lieu de grandir depuis son propre centre. */
+                  <motion.div
+                    key="menu-compte"
+                    initial={{ opacity: 0, scale: 0.95, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0, transition: transitionMenu }}
+                    exit={{ opacity: 0, scale: 0.95, y: -6, transition: transitionMenu }}
+                    className="absolute right-0 top-14 z-50 w-64 origin-top-right overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2"
+                  >
                     <Link
                       href="/espace-jeune/profil"
                       className="flex items-center gap-3 border-b border-outline-variant p-4 hover:bg-surface-container-low"
@@ -166,19 +238,40 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
                       </Link>
                     ))}
                     <LogoutButton className="w-full border-t border-outline-variant px-4 py-2.5 text-left text-sm text-on-surface-variant hover:bg-surface-container-low hover:text-primary" />
-                  </div>
-                </>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </nav>
         </div>
 
-        {/* Recherche dépliée sur mobile — sous la barre, pleine largeur. */}
-        {rechercheOuverte && (
-          <div className="border-t border-outline-variant px-margin-mobile py-2 md:hidden">
-            <RechercheNavbar autoFocus onNavigated={() => setRechercheOuverte(false)} />
-          </div>
-        )}
+        {/*
+          Recherche dépliée sur mobile — sous la barre, pleine largeur.
+
+          Elle se DÉPLIE : la hauteur est animée, et non seulement l'opacité.
+          Ce panneau pousse toute la page vers le bas ; apparu d'un coup, il
+          déplaçait le contenu d'une soixantaine de pixels sans prévenir, et
+          l'on perdait la ligne qu'on était en train de lire.
+
+          `overflow-hidden` sur l'enveloppe, bordure et marges sur l'enfant :
+          à hauteur nulle, un `border-t` porté par l'enveloppe laisserait un
+          filet d'un pixel en travers de l'en-tête.
+        */}
+        <AnimatePresence initial={false}>
+          {rechercheOuverte && (
+            <motion.div
+              key="recherche-mobile"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1, transition: transitionPanneau }}
+              exit={{ height: 0, opacity: 0, transition: transitionPanneauSortie }}
+              className="overflow-hidden md:hidden"
+            >
+              <div className="border-t border-outline-variant px-margin-mobile py-2">
+                <RechercheNavbar autoFocus onNavigated={() => setRechercheOuverte(false)} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/*
@@ -230,6 +323,8 @@ function PanneauNotifications({
   markRead: ReturnType<typeof useNotifications>["markRead"];
   actif: boolean;
 }) {
+  const transitionMenu = useTransitionUI(DUREE_MENU);
+
   return (
     /*
      * Masqué sur mobile : les notifications y sont devenues un ONGLET de la
@@ -259,12 +354,21 @@ function PanneauNotifications({
         <span className="hidden sm:block">Notifs</span>
       </button>
 
-      {ouvert && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={onClose} />
-          {/* `fixed` sur mobile pour se poser d'un bord à l'autre, `absolute`
-              dès que le panneau tient sous la cloche. */}
-          <div className="fixed inset-x-2 top-14 z-50 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2 sm:absolute sm:inset-x-auto sm:right-0 sm:w-80">
+      {/* Invisible, donc non animé — et retiré aussitôt, pour ne pas capter de
+          clic pendant que le panneau s'en va. */}
+      {ouvert && <div className="fixed inset-0 z-40" onClick={onClose} />}
+
+      <AnimatePresence>
+        {ouvert && (
+          /* `fixed` sur mobile pour se poser d'un bord à l'autre, `absolute`
+             dès que le panneau tient sous la cloche. */
+          <motion.div
+            key="panneau-notifications"
+            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0, transition: transitionMenu }}
+            exit={{ opacity: 0, scale: 0.95, y: -6, transition: transitionMenu }}
+            className="fixed inset-x-2 top-14 z-50 origin-top overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2 sm:absolute sm:inset-x-auto sm:right-0 sm:w-80 sm:origin-top-right"
+          >
             <div className="flex items-center justify-between border-b border-outline-variant px-4 py-3">
               <p className="font-bold text-primary">Notifications</p>
               {unread > 0 && (
@@ -321,9 +425,9 @@ function PanneauNotifications({
             >
               Voir toutes les notifications
             </Link>
-          </div>
-        </>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

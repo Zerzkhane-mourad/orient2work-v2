@@ -86,7 +86,12 @@ const ARGUMENTS = [
 export default function EntreprisesPage() {
   return (
     <>
-      <section className="champ-heros champ-heros-gauche py-20 text-white lg:py-24">
+      {/* Remonte sous l'en-tête sans fond (`-mt-20`, 80 px rendus au retrait
+          haut) ; `data-heros-sombre` le fait passer en ton clair. */}
+      <section
+        data-heros-sombre=""
+        className="champ-heros champ-heros-gauche -mt-20 pb-20 pt-40 text-white lg:pb-24 lg:pt-44"
+      >
         <div className="mx-auto grid max-w-container-max gap-12 px-margin-mobile lg:grid-cols-12 lg:gap-16 lg:px-margin-desktop">
           <Reveal auChargement className="lg:col-span-6">
             <p className="font-semibold text-secondary-fixed-dim">Pour les entreprises</p>

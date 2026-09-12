@@ -11,10 +11,24 @@
  * Cinq cibles au maximum, `min-h-14` chacune : en dessous, la précision du
  * pouce ne suffit plus et l'on ouvre l'onglet voisin.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  AnimatePresence,
+  motion,
+  useDragControls,
+  useReducedMotion,
+  type PanInfo,
+} from "framer-motion";
 import { Icon } from "@/components/ui";
+import {
+  COURBE_SORTIE,
+  DUREE_FEUILLE,
+  DUREE_PANNEAU,
+  DUREE_VOILE,
+  useTransitionUI,
+} from "@/components/motion/transitions";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +51,10 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
   const chemin = usePathname();
   const [plusOuvert, setPlusOuvert] = useState(false);
 
+  // Le trait d'onglet parcourt au plus la largeur de l'écran : la durée d'un
+  // petit menu suffit, celle de la feuille le ferait traîner derrière le doigt.
+  const transitionOnglet = useTransitionUI(DUREE_VOILE);
+
   // La feuille se referme au changement de page : sans cela, elle resterait
   // ouverte par-dessus la destination que l'on vient d'atteindre.
   useEffect(() => {
@@ -56,6 +74,22 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
     };
   }, [plusOuvert]);
 
+  /*
+   * Échap referme la feuille.
+   *
+   * C'est ce que fait un `<dialog>` nativement, et ce que cette feuille faisait
+   * perdre en étant dessinée à la main : au clavier, elle ne se fermait que si
+   * l'on retrouvait le voile — un bouton sans libellé visible.
+   */
+  useEffect(() => {
+    if (!plusOuvert) return;
+    const auClavier = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPlusOuvert(false);
+    };
+    document.addEventListener("keydown", auClavier);
+    return () => document.removeEventListener("keydown", auClavier);
+  }, [plusOuvert]);
+
   // « Plus » s'allume aussi quand la page courante s'y trouve : l'utilisateur
   // doit voir OÙ il est, même si la destination n'a pas son propre onglet.
   const ailleurs = [...NAV_PLUS_RECHERCHE, ...NAV_COMPTE].some((d) => estActif(d.href, chemin));
@@ -65,7 +99,22 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
 
   return (
     <>
-      {plusOuvert && <FeuillePlus chemin={chemin} onClose={() => setPlusOuvert(false)} />}
+      {/*
+        `AnimatePresence` retient la feuille le temps de sa sortie.
+
+        Sans lui, `plusOuvert` repassé à faux la retire du DOM à l'image
+        suivante : elle disparaissait d'un coup, alors même que son ouverture
+        avait été animée — le retour paraissait cassé, pas rapide.
+      */}
+      <AnimatePresence>
+        {plusOuvert && (
+          <FeuillePlus
+            key="feuille-plus"
+            chemin={chemin}
+            onClose={() => setPlusOuvert(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <nav
         aria-label="Navigation principale"
@@ -89,9 +138,18 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
                 )}
               >
                 {/* Trait supérieur plutôt qu'un fond : il marque l'onglet sans
-                    élargir la cible ni assombrir l'icône. */}
+                    élargir la cible ni assombrir l'icône.
+
+                    `layoutId` partagé avec le trait de « Plus » : il ne
+                    réapparaît pas ailleurs, il GLISSE jusqu'à l'onglet atteint.
+                    Les deux ne sont jamais allumés en même temps — « Plus »
+                    ne s'allume que pour les destinations sans onglet. */}
                 {actif && (
-                  <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-secondary" />
+                  <motion.span
+                    layoutId="onglet-actif-mobile"
+                    transition={transitionOnglet}
+                    className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-secondary"
+                  />
                 )}
                 <span className="relative">
                   <Icon name={item.icon} filled={actif} className="text-2xl" />
@@ -126,9 +184,22 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
             )}
           >
             {ailleurs && (
-              <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-secondary" />
+              <motion.span
+                layoutId="onglet-actif-mobile"
+                transition={transitionOnglet}
+                className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-secondary"
+              />
             )}
-            <Icon name="menu" className="text-2xl" />
+            {/* L'icône bascule vers la croix quand la feuille est ouverte : le
+                bouton dit alors ce qu'un second appui ferait. La rotation lie
+                les deux états — sans elle, c'est un clignotement. */}
+            <motion.span
+              animate={{ rotate: plusOuvert ? 90 : 0 }}
+              transition={transitionOnglet}
+              className="block"
+            >
+              <Icon name={plusOuvert ? "close" : "menu"} className="block text-2xl" />
+            </motion.span>
             <span>Plus</span>
           </button>
         </div>
@@ -137,29 +208,109 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
   );
 }
 
+/** Course, en pixels, au-delà de laquelle relâcher la poignée referme. */
+const SEUIL_FERMETURE_PX = 96;
+
+/** Vitesse de rejet — un geste bref et vif referme sans atteindre le seuil. */
+const SEUIL_VITESSE = 550;
+
 /**
  * Feuille du bas — le reste des destinations.
  *
  * Ancrée en BAS et non au centre : elle s'ouvre là où le pouce vient de
  * toucher, et les entrées restent dans la moitié atteignable de l'écran.
+ *
+ * ── Le mouvement ────────────────────────────────────────────────────────────
+ *
+ * Elle MONTE depuis le bord inférieur, d'où le doigt vient de partir, et
+ * redescend par le même chemin. Une feuille qui se pose sans trajet ne dit pas
+ * d'où elle vient, ni par où la renvoyer.
+ *
+ * Le voile se fond séparément : lié à la feuille, il aurait glissé avec elle et
+ * découvert la page par le bas, comme un store qu'on relève.
+ *
+ * ── Le glissé ───────────────────────────────────────────────────────────────
+ *
+ * La poignée n'était qu'un dessin : elle annonçait un panneau qu'on referme en
+ * le repoussant, sans que le geste fasse quoi que ce soit. Elle le fait
+ * maintenant — et elle SEULE (`dragListener={false}` + `dragControls`). Poser
+ * le glissé sur la feuille entière lui ferait confisquer le défilement de sa
+ * propre liste : sur un écran court, les destinations du bas deviendraient
+ * inatteignables.
  */
 function FeuillePlus({ chemin, onClose }: { chemin: string; onClose: () => void }) {
+  const poignee = useDragControls();
+  const reduire = useReducedMotion();
+  const feuille = useRef<HTMLDivElement>(null);
+
+  /*
+   * Le focus entre dans la feuille, et revient d'où il venait.
+   *
+   * `aria-modal` annonce aux lecteurs d'écran que le reste de la page ne
+   * compte plus. Sans ce déplacement, l'annonce serait un mensonge : le focus
+   * resterait sur le bouton « Plus », hors de la feuille, et la première
+   * tabulation partirait explorer une page déclarée inerte.
+   *
+   * Le retour se fait au démontage, donc APRÈS l'animation de sortie — le
+   * bouton reprend le focus une fois la feuille effectivement partie.
+   */
+  useEffect(() => {
+    const precedent = document.activeElement as HTMLElement | null;
+    feuille.current?.focus();
+    return () => precedent?.focus?.();
+  }, []);
+
+  const transitionEntree = useTransitionUI(DUREE_FEUILLE);
+  const transitionSortie = useTransitionUI(DUREE_PANNEAU, COURBE_SORTIE);
+  const transitionVoile = useTransitionUI(DUREE_VOILE);
+
+  const auRelacher = (_: unknown, info: PanInfo) => {
+    if (info.offset.y > SEUIL_FERMETURE_PX || info.velocity.y > SEUIL_VITESSE) onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 sm:hidden">
-      <button
+      <motion.button
         type="button"
         aria-label="Fermer le menu"
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={transitionVoile}
         className="absolute inset-0 bg-primary/50 backdrop-blur-sm"
       />
 
-      <div
+      <motion.div
+        ref={feuille}
         role="dialog"
+        aria-modal="true"
         aria-label="Plus de destinations"
+        /* `-1` : la feuille se laisse focaliser à l'ouverture sans pour autant
+           s'insérer dans le parcours de tabulation. */
+        tabIndex={-1}
+        initial={{ y: "100%" }}
+        animate={{ y: 0, transition: transitionEntree }}
+        /* Sortie plus courte et accélérée : la feuille libère l'écran sans le
+           retenir. La même courbe dans les deux sens ferait traîner le retour. */
+        exit={{ y: "100%", transition: transitionSortie }}
+        drag={reduire ? false : "y"}
+        dragListener={false}
+        dragControls={poignee}
+        /* Bornes nulles + élasticité vers le bas UNIQUEMENT : la feuille se
+           laisse repousser, jamais tirer au-delà du haut de l'écran. */
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.5 }}
+        onDragEnd={auRelacher}
         className="absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto overscroll-contain rounded-t-xl border-t border-outline-variant bg-surface-container-lowest pb-safe"
       >
-        {/* Poignée : dit que le panneau se referme, avant même de chercher où. */}
-        <div className="flex justify-center py-3">
+        {/* Poignée : dit que le panneau se referme, avant même de chercher où.
+            `touch-none` empêche le navigateur de traiter le geste comme un
+            défilement — sans lui, le glissé ne démarre qu'une fois sur deux. */}
+        <div
+          onPointerDown={(e) => poignee.start(e)}
+          className="flex touch-none cursor-grab justify-center py-3 active:cursor-grabbing"
+        >
           <span className="h-1 w-10 rounded-full bg-outline-variant" />
         </div>
 
@@ -169,7 +320,7 @@ function FeuillePlus({ chemin, onClose }: { chemin: string; onClose: () => void 
         <div className="border-t border-outline-variant">
           <LogoutButton className="flex w-full min-h-14 items-center gap-3 px-4 text-sm font-semibold text-on-surface-variant" />
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

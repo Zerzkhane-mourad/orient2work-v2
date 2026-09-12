@@ -6,8 +6,11 @@
  * pas avec un mot-clé en tête — beaucoup viennent voir « ce qu'il y a », et
  * n'avaient jusqu'ici aucune porte d'entrée avant le catalogue complet.
  *
- * Chaque tuile mène au catalogue déjà filtré (`/offres?type=…`), grâce au
- * paramètre d'URL que `useRechercheOffres` lit déjà.
+ * Chaque tuile mène au catalogue de l'Espace Jeune déjà filtré
+ * (`/espace-jeune/offres?type=…`), grâce au paramètre d'URL que
+ * `useRechercheOffres` lit déjà. Le catalogue public (`/offres`) a été retiré :
+ * un visiteur non connecté passe donc par la connexion (`RequireRole`) avant
+ * d'arriver aux offres.
  *
  * Les libellés viennent du référentiel serveur (`OPPORTUNITY_TYPES`), pas d'une
  * liste recopiée : ajouter un type côté API l'ajoute ici, et un type retiré
@@ -39,7 +42,7 @@ export function CategoriesSection() {
       {OPPORTUNITY_TYPES.map((type) => (
         <Link
           key={type}
-          href={`/offres?type=${encodeURIComponent(type)}`}
+          href={`/espace-jeune/offres?type=${encodeURIComponent(type)}`}
           /*
            * `min-h-28` : cible tactile largement au-dessus des 44 px exigés, et
            * hauteur identique pour toutes, sinon la rangée se déforme selon la
@@ -66,7 +69,9 @@ export function CategoriesSection() {
               className="text-[24px] transition-transform duration-200 group-hover:scale-110"
             />
           </span>
-          <span className="text-sm font-semibold text-on-surface">{type}</span>
+          {/* Navy plutôt que `on-surface` : le libellé appartient à la famille
+              de la marque, et gagne au passage un cran de contraste. */}
+          <span className="text-sm font-semibold text-primary">{type}</span>
         </Link>
       ))}
     </div>
