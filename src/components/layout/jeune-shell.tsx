@@ -30,15 +30,31 @@ import { JeuneBottomNav } from "./jeune-bottom-nav";
 import { estActif, estImmersif, NAV_COMPTE, NAV_DESKTOP } from "./jeune-nav";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { useProfile } from "@/features/jeune/profil/profile-store";
-import { useNotifications } from "@/features/notifications/use-notifications";
+import { NotificationBell } from "@/features/notifications/notification-bell";
+import {
+  NotificationsProvider,
+  useNotifications,
+} from "@/features/notifications/notifications-store";
 import { RechercheNavbar } from "@/features/recherche/recherche-navbar";
 import { useDefilement } from "@/lib/use-defilement";
 import { cn } from "@/lib/utils";
 
+/**
+ * Le fournisseur de notifications enveloppe toute la coque : la cloche, la
+ * pastille de la barre du bas et les pages lisent la même liste.
+ */
 export function JeuneShell({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationsProvider>
+      <CoqueJeune>{children}</CoqueJeune>
+    </NotificationsProvider>
+  );
+}
+
+function CoqueJeune({ children }: { children: React.ReactNode }) {
   // Profil vivant : l'avatar suit les modifications faites sur la page profil.
   const { jeune } = useProfile();
-  const { notifications, unread, markRead } = useNotifications(10);
+  const { unread } = useNotifications();
   const chemin = usePathname();
 
   const [meOpen, setMeOpen] = useState(false);
@@ -158,17 +174,21 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
               </span>
             </button>
 
-            <PanneauNotifications
-              ouvert={notifOpen}
-              onToggle={() => {
-                setNotifOpen((v) => !v);
-                setMeOpen(false);
+            {/*
+              Masquée sur mobile : les notifications y sont un ONGLET de la
+              barre du bas, avec leur pastille. Les laisser aussi ici les
+              mettrait à deux endroits, et la cloche du haut serait le mauvais
+              des deux — hors du champ du pouce.
+            */}
+            <NotificationBell
+              allHref="/espace-jeune/notifications"
+              variant="tab"
+              className="hidden sm:flex"
+              open={notifOpen}
+              onOpenChange={(ouvert) => {
+                setNotifOpen(ouvert);
+                if (ouvert) setMeOpen(false);
               }}
-              onClose={() => setNotifOpen(false)}
-              notifications={notifications}
-              unread={unread}
-              markRead={markRead}
-              actif={chemin === "/espace-jeune/notifications"}
             />
 
             <div className="relative flex items-center">
@@ -295,139 +315,6 @@ export function JeuneShell({ children }: { children: React.ReactNode }) {
       <RetourEnHaut className={immersif ? undefined : "bottom-20 sm:bottom-4"} />
 
       <JeuneBottomNav unread={unread} />
-    </div>
-  );
-}
-
-/**
- * Cloche et panneau de notifications.
- *
- * Le panneau était large de 320 px et ancré à droite : sur un écran de 320 px,
- * il dépassait du cadre et emportait la page en défilement horizontal. Il
- * s'étend maintenant d'un bord à l'autre tant que la place manque.
- */
-function PanneauNotifications({
-  ouvert,
-  onToggle,
-  onClose,
-  notifications,
-  unread,
-  markRead,
-  actif,
-}: {
-  ouvert: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-  notifications: ReturnType<typeof useNotifications>["notifications"];
-  unread: number;
-  markRead: ReturnType<typeof useNotifications>["markRead"];
-  actif: boolean;
-}) {
-  const transitionMenu = useTransitionUI(DUREE_MENU);
-
-  return (
-    /*
-     * Masqué sur mobile : les notifications y sont devenues un ONGLET de la
-     * barre du bas, avec leur pastille. Les laisser aussi ici les mettrait à
-     * deux endroits à la fois, et la cloche du haut serait le mauvais des deux
-     * — hors du champ du pouce, et sans compteur visible en permanence.
-     */
-    <div className="relative hidden items-center sm:flex">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={ouvert}
-        aria-label={unread > 0 ? `Notifications, ${unread} non lues` : "Notifications"}
-        className={cn(
-          "relative flex min-h-11 min-w-11 flex-col items-center justify-center px-2 pt-1 text-[11px] font-medium transition-colors sm:min-w-16",
-          actif ? "text-primary" : "text-on-surface-variant hover:text-primary",
-        )}
-      >
-        <span className="relative">
-          <Icon name="notifications" filled={ouvert} className="text-2xl" />
-          {unread > 0 && (
-            <span className="absolute -right-1.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-on-error">
-              {unread}
-            </span>
-          )}
-        </span>
-        <span className="hidden sm:block">Notifs</span>
-      </button>
-
-      {/* Invisible, donc non animé — et retiré aussitôt, pour ne pas capter de
-          clic pendant que le panneau s'en va. */}
-      {ouvert && <div className="fixed inset-0 z-40" onClick={onClose} />}
-
-      <AnimatePresence>
-        {ouvert && (
-          /* `fixed` sur mobile pour se poser d'un bord à l'autre, `absolute`
-             dès que le panneau tient sous la cloche. */
-          <motion.div
-            key="panneau-notifications"
-            initial={{ opacity: 0, scale: 0.95, y: -6 }}
-            animate={{ opacity: 1, scale: 1, y: 0, transition: transitionMenu }}
-            exit={{ opacity: 0, scale: 0.95, y: -6, transition: transitionMenu }}
-            className="fixed inset-x-2 top-14 z-50 origin-top overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-level-2 sm:absolute sm:inset-x-auto sm:right-0 sm:w-80 sm:origin-top-right"
-          >
-            <div className="flex items-center justify-between border-b border-outline-variant px-4 py-3">
-              <p className="font-bold text-primary">Notifications</p>
-              {unread > 0 && (
-                <span className="rounded-full bg-error-container px-2 py-0.5 text-xs font-bold text-on-error-container">
-                  {unread} non lues
-                </span>
-              )}
-            </div>
-
-            <div className="max-h-[60vh] overflow-y-auto overscroll-contain sm:max-h-96">
-              {notifications.length === 0 && (
-                <p className="px-4 py-6 text-center text-sm text-on-surface-variant">
-                  Aucune notification.
-                </p>
-              )}
-              {notifications.slice(0, 5).map((n) => (
-                <Link
-                  key={n.id}
-                  href={n.href ?? "/espace-jeune/notifications"}
-                  onClick={() => {
-                    onClose();
-                    if (!n.read) void markRead(n.id);
-                  }}
-                  className={cn(
-                    "flex gap-3 border-b border-outline-variant px-4 py-3 last:border-0 hover:bg-surface-container-low",
-                    !n.read && "bg-surface-container-low",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                      n.accent
-                        ? "bg-secondary-container text-on-secondary-container"
-                        : "bg-surface-container text-on-surface-variant",
-                    )}
-                  >
-                    <Icon name={n.icon} className="text-[18px]" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold leading-snug text-on-surface">{n.title}</p>
-                    <p className="text-xs text-on-surface-variant">{n.time}</p>
-                  </div>
-                  {!n.read && (
-                    <span className="ml-auto mt-1 h-2 w-2 shrink-0 rounded-full bg-secondary" />
-                  )}
-                </Link>
-              ))}
-            </div>
-
-            <Link
-              href="/espace-jeune/notifications"
-              onClick={onClose}
-              className="block border-t border-outline-variant py-3 text-center text-sm font-semibold text-primary hover:bg-surface-container-low"
-            >
-              Voir toutes les notifications
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

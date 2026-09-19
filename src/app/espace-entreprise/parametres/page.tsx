@@ -2,6 +2,7 @@
 
 import { useSession } from "@/features/auth/session-provider";
 import { useEntreprise } from "@/features/entreprise/entreprise-store";
+import { ThemePicker } from "@/features/entreprise/theme-picker";
 import { AccountSettings } from "@/features/settings/account-settings";
 
 export default function ParametresEntreprisePage() {
@@ -14,6 +15,7 @@ export default function ParametresEntreprisePage() {
     <AccountSettings
       name={entreprise.responsable || entreprise.nom}
       email={user?.email ?? entreprise.emailResponsable}
+      preferences={<ThemePicker />}
     />
   );
 }

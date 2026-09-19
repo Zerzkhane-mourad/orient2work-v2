@@ -180,7 +180,7 @@ export default function MesFormationsPage() {
                 </p>
               </div>
             </div>
-            <ButtonLink href="/espace-jeune/documents" variant="outline" size="sm">
+            <ButtonLink href="/espace-jeune/documents#certificats" variant="outline" size="sm">
               Voir mes certificats
             </ButtonLink>
           </CardBody>

@@ -26,10 +26,12 @@ interface AccountSettingsProps {
   email: string;
   /** Formulaire d'identité propre à l'espace (le profil se modifie ailleurs). */
   children?: React.ReactNode;
+  /** Cartes propres à l'espace (ex. thème entreprise), placées avant la sécurité. */
+  preferences?: React.ReactNode;
 }
 
 /** Paramètres de compte partagés : identité, sécurité, sessions. */
-export function AccountSettings({ name, email, children }: AccountSettingsProps) {
+export function AccountSettings({ name, email, children, preferences }: AccountSettingsProps) {
   return (
     <div className="space-y-6">
       <PageHeader title="Paramètres" subtitle="Gérez votre compte et votre sécurité." />
@@ -51,6 +53,8 @@ export function AccountSettings({ name, email, children }: AccountSettingsProps)
           {children}
         </CardBody>
       </Card>
+
+      {preferences}
 
       <ChangePasswordCard />
       <SessionsCard />

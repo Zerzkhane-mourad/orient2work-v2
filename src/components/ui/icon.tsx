@@ -113,6 +113,10 @@ import {
   MdCelebration,
   MdClose,
   MdHome,
+  MdCrop,
+  MdRotateRight,
+  MdZoomIn,
+  MdZoomOut,
 } from "react-icons/md";
 import { cn } from "@/lib/utils";
 
@@ -160,6 +164,7 @@ const ICONS = {
   close: MdClose,
   cloud_upload: MdCloudUpload,
   code: MdCode,
+  crop: MdCrop,
   dashboard: MdDashboard,
   delete: MdDelete,
   description: MdDescription,
@@ -216,6 +221,7 @@ const ICONS = {
   rate_review: MdRateReview,
   remove: MdRemove,
   replay: MdReplay,
+  rotate_right: MdRotateRight,
   rocket_launch: MdRocketLaunch,
   save: MdSave,
   schedule: MdSchedule,
@@ -241,6 +247,8 @@ const ICONS = {
   work: MdWork,
   work_history: MdWorkHistory,
   workspace_premium: MdWorkspacePremium,
+  zoom_in: MdZoomIn,
+  zoom_out: MdZoomOut,
 } satisfies Record<string, IconType>;
 
 /**

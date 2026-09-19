@@ -53,6 +53,20 @@ function stripTags(fragment: string): string {
     .trim();
 }
 
+/**
+ * Durée de lecture estimée de chaque chapitre, en minutes.
+ *
+ * Le temps total est saisi à la main dans le back-office : on le répartit au
+ * prorata du texte de chaque chapitre plutôt que d'inventer une vitesse de
+ * lecture qui contredirait ce total. Une minute au minimum par chapitre.
+ */
+export function chapterMinutes(chapters: Chapter[], totalMinutes: number): number[] {
+  const lengths = chapters.map((c) => stripTags(c.html).length);
+  const sum = lengths.reduce((a, b) => a + b, 0);
+  if (sum === 0) return chapters.map(() => Math.max(1, Math.round(totalMinutes / chapters.length)));
+  return lengths.map((length) => Math.max(1, Math.round((length / sum) * totalMinutes)));
+}
+
 /** Nombre de chapitres terminés déduit d'une progression déjà enregistrée. */
 export function completedFromProgress(progression: number, total: number): number {
   if (total === 0) return 0;

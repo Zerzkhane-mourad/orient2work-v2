@@ -16,7 +16,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ButtonLink, Card, CardBody, Icon, ProgressBar, RichText } from "@/components/ui";
-import { completedFromProgress, splitIntoChapters } from "./chapters";
+import { CertificatButton } from "./certificat-button";
+import { chapterMinutes, completedFromProgress, splitIntoChapters } from "./chapters";
 import { FormationQuiz } from "./formation-quiz";
 import { useProfileOptional } from "@/features/jeune/profil/profile-store";
 import { api } from "@/lib/api";
@@ -24,12 +25,22 @@ import type { ApiFormation } from "@/lib/api/types";
 import { POINTS_FORMATION_LUE, POINTS_FORMATION_VALIDEE } from "@/lib/score";
 import { cn } from "@/lib/utils";
 
-export function CoursePlayer({ formation }: { formation: ApiFormation }) {
+interface CoursePlayerProps {
+  formation: ApiFormation;
+  /** Prévenu à chaque chapitre terminé : l'en-tête affiche la même progression. */
+  onProgressChange?: (progress: number) => void;
+}
+
+export function CoursePlayer({ formation, onProgressChange }: CoursePlayerProps) {
   const chapters = useMemo(
     () => splitIntoChapters(formation.contenuHtml),
     [formation.contenuHtml],
   );
   const total = chapters.length;
+  const minutes = useMemo(
+    () => chapterMinutes(chapters, formation.tempsLectureMin),
+    [chapters, formation.tempsLectureMin],
+  );
 
   const [completed, setCompleted] = useState(() =>
     completedFromProgress(formation.progression, total),
@@ -45,6 +56,10 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
   const chapter = chapters[index];
 
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onProgressChange?.(progress);
+  }, [progress, onProgressChange]);
 
   /* ── Enregistrement de la progression ─────────────────────────────────── */
 
@@ -134,7 +149,14 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
                 chapterDone ? "text-success" : current ? "text-secondary" : "text-outline",
               )}
             />
-            <span className="flex-1 leading-snug">{c.title}</span>
+            <span className="flex-1 leading-snug">
+              <span className="block">
+                {i + 1}. {c.title}
+              </span>
+              <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-on-surface-variant">
+                <Icon name="auto_stories" className="text-[13px]" /> {minutes[i]} min
+              </span>
+            </span>
             <span className="sr-only">
               {chapterDone ? "(terminé)" : current ? "(en cours)" : ""}
             </span>
@@ -143,24 +165,44 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
       })}
 
       {formation.quiz && (
-        <div
-          className={cn(
-            "mt-1 flex min-h-11 items-center gap-2.5 rounded-lg border-t border-outline-variant px-2.5 py-2 pt-3 text-sm",
-            done ? "text-primary" : "text-on-surface-variant",
-          )}
-        >
-          <Icon
-            name={done ? "quiz" : "lock"}
-            className={cn("shrink-0 text-[18px]", done ? "text-secondary" : "text-outline")}
-          />
-          <span className="flex-1 font-semibold">Test de la formation</span>
+        <div className="mt-1 border-t border-outline-variant pt-1">
+          <button
+            type="button"
+            onClick={scrollToQuiz}
+            disabled={!done}
+            className={cn(
+              "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+              done
+                ? "text-primary hover:bg-surface-container-low"
+                : "cursor-not-allowed text-on-surface-variant",
+            )}
+          >
+            <Icon
+              name={dejaValidee ? "workspace_premium" : done ? "quiz" : "lock"}
+              filled={dejaValidee}
+              className={cn(
+                "shrink-0 text-[18px]",
+                dejaValidee ? "text-success" : done ? "text-secondary" : "text-outline",
+              )}
+            />
+            <span className="flex-1 leading-snug">
+              <span className="block font-semibold">Test final</span>
+              <span className="mt-0.5 block text-xs font-normal text-on-surface-variant">
+                {dejaValidee
+                  ? "Réussi"
+                  : done
+                    ? `${formation.quiz.questions.length} questions · ${formation.quiz.scoreMinimum}% requis`
+                    : "Débloqué à la fin du cours"}
+              </span>
+            </span>
+          </button>
         </div>
       )}
     </nav>
   );
 
   return (
-    <div ref={topRef}>
+    <div ref={topRef} className="scroll-mt-14">
       {/* Barre de cours — colle sous l'en-tête applicatif (h-14). */}
       <div className="sticky top-14 z-30 -mx-margin-mobile mb-5 border-b border-outline-variant bg-surface-container-lowest/95 px-margin-mobile py-2.5 backdrop-blur lg:-mx-6 lg:px-6">
         <div className="flex items-center gap-3">
@@ -195,8 +237,14 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
         <div className="min-w-0">
           <Card>
             <CardBody>
-              <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
-                Chapitre {index + 1} sur {total}
+              <p className="flex flex-wrap items-center gap-x-2 text-xs font-bold uppercase tracking-wide text-on-surface-variant">
+                <span>
+                  Chapitre {index + 1} sur {total}
+                </span>
+                <span aria-hidden>·</span>
+                <span className="flex items-center gap-1 normal-case">
+                  <Icon name="schedule" className="text-[14px]" /> {minutes[index]} min de lecture
+                </span>
               </p>
               <h2 className="mt-1 font-headline text-2xl font-bold text-primary">
                 {chapter!.title}
@@ -256,17 +304,30 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
                       <Icon name="quiz" className="text-[18px]" /> Passer le test
                     </Button>
                   )}
-                  <ButtonLink href="/espace-jeune/documents" variant="outline">
-                    <Icon name="workspace_premium" className="text-[18px]" /> Mon certificat
-                  </ButtonLink>
+                  {dejaValidee ? (
+                    <CertificatButton
+                      formationId={formation.id}
+                      formation={formation.titre}
+                      variant="outline"
+                    />
+                  ) : (
+                    <ButtonLink href="/espace-jeune/documents" variant="outline">
+                      <Icon name="workspace_premium" className="text-[18px]" /> Mes certificats
+                    </ButtonLink>
+                  )}
                 </div>
               </CardBody>
             </Card>
           )}
 
           {formation.quiz && (
-            <div id="quiz" className="mt-6">
-              <FormationQuiz formationId={formation.id} quiz={formation.quiz} unlocked={done} />
+            <div id="quiz" className="mt-6 scroll-mt-32">
+              <FormationQuiz
+                formationId={formation.id}
+                formationTitre={formation.titre}
+                quiz={formation.quiz}
+                unlocked={done}
+              />
             </div>
           )}
         </div>
@@ -288,31 +349,6 @@ export function CoursePlayer({ formation }: { formation: ApiFormation }) {
               </CardBody>
             </Card>
 
-            <Card>
-              <CardBody className="space-y-2">
-                <p className="font-bold text-primary">Cette formation comprend :</p>
-                <ul className="space-y-2 text-sm text-on-surface-variant">
-                  <li className="flex items-center gap-2">
-                    <Icon name="auto_stories" className="text-[18px] text-primary" />
-                    {formation.tempsLectureMin} min de lecture
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Icon name="picture_as_pdf" className="text-[18px] text-primary" />
-                    Cours téléchargeable (PDF)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Icon name="quiz" className="text-[18px] text-primary" />
-                    {formation.quiz
-                      ? `Test de la formation (${formation.quiz.questions.length} questions)`
-                      : "Test de la formation"}
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Icon name="workspace_premium" className="text-[18px] text-primary" />
-                    Certificat de fin de formation
-                  </li>
-                </ul>
-              </CardBody>
-            </Card>
           </div>
         </aside>
       </div>

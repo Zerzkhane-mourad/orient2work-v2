@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
-import { fileToResizedDataUrl, ImageError } from "@/lib/image";
+import { ImageCropper, type CropSettings } from "./image-cropper";
+import { useProtectedImage } from "@/lib/api/media";
+import { assertImageFile, blobToDataUrl, fileToResizedDataUrl, ImageError } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
 interface ImageUploadProps {
@@ -24,6 +26,19 @@ interface ImageUploadProps {
   hint?: string;
   /** Shown inside the empty state. */
   emptyLabel?: string;
+  /**
+   * Active le rognage : chaque image choisie passe par le rogneur avant d'être
+   * retenue, et l'image en place peut être recadrée. `onFile` reçoit alors le
+   * fichier RECADRÉ.
+   */
+  crop?: CropSettings;
+  /** Prévenu à l'ouverture et à la fermeture du rogneur (pour bloquer « Enregistrer »). */
+  onCroppingChange?: (cropping: boolean) => void;
+}
+
+interface CropSource {
+  src: string;
+  filename: string;
 }
 
 /** Pick an image from the device (click or drag & drop), preview and remove it. */
@@ -36,15 +51,50 @@ export function ImageUpload({
   maxHeight,
   hint,
   emptyLabel = "Choisir une image",
+  crop,
+  onCroppingChange,
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
 
+  // Une image déjà enregistrée est servie par une route protégée : on
+  // l'affiche (et on la recadre) via son URL `blob:`.
+  const preview = useProtectedImage(value);
+
+  // Dernière image choisie, en pleine résolution : recadrer une seconde fois
+  // repart de l'original, pas du résultat déjà réduit.
+  const [original, setOriginal] = useState<CropSource | null>(null);
+  const [cropping, setCropping] = useState<CropSource | null>(null);
+
+  useEffect(() => {
+    onCroppingChange?.(cropping !== null);
+  }, [cropping, onCroppingChange]);
+
+  // Les URLs `blob:` des originaux restent en mémoire tant qu'on ne les libère pas.
+  useEffect(() => {
+    if (!original) return;
+    return () => URL.revokeObjectURL(original.src);
+  }, [original]);
+
   const handleFile = async (file?: File) => {
     if (!file) return;
     setError(null);
+
+    if (crop) {
+      try {
+        assertImageFile(file);
+      } catch (e) {
+        setError(e instanceof ImageError ? e.message : "Le chargement de l'image a échoué.");
+        return;
+      }
+      const source = { src: URL.createObjectURL(file), filename: file.name };
+      setOriginal(source);
+      setCropping(source);
+      return;
+    }
+
     setBusy(true);
     try {
       onChange(await fileToResizedDataUrl(file, { maxWidth, maxHeight }));
@@ -55,6 +105,30 @@ export function ImageUpload({
       setBusy(false);
     }
   };
+
+  const applyCrop = async (file: File) => {
+    onChange(await blobToDataUrl(file));
+    onFile?.(file);
+    setCropping(null);
+  };
+
+  const recrop = () => {
+    if (original) setCropping(original);
+    else if (preview) setCropping({ src: preview, filename: "image.jpg" });
+  };
+
+  if (crop && cropping) {
+    return (
+      <ImageCropper
+        key={cropping.src}
+        src={cropping.src}
+        filename={cropping.filename}
+        {...crop}
+        onCancel={() => setCropping(null)}
+        onDone={(file) => void applyCrop(file)}
+      />
+    );
+  }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -82,13 +156,17 @@ export function ImageUpload({
           dragging
             ? "border-secondary bg-secondary-container/20"
             : "border-outline-variant hover:border-secondary",
-          shape === "circle" ? "mx-auto h-36 w-36 rounded-full" : "h-40 w-full rounded-lg",
+          shape === "circle"
+            ? "mx-auto h-36 w-36 rounded-full"
+            : cn("w-full rounded-lg", !crop && "h-40"),
         )}
+        // Avec rognage, l'aperçu a exactement le format du cadre.
+        style={shape === "wide" && crop ? { aspectRatio: crop.aspect } : undefined}
       >
-        {value ? (
-          // Data URLs from the device — next/image adds no value here.
+        {preview ? (
+          // Data/blob URLs from the device — next/image adds no value here.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="Aperçu" className="h-full w-full object-cover" />
+          <img src={preview} alt="Aperçu" className="h-full w-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1 px-4 text-center text-on-surface-variant">
             <Icon name="cloud_upload" className="text-3xl text-secondary" />
@@ -117,7 +195,16 @@ export function ImageUpload({
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-on-surface-variant">{error ? "" : hint}</p>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
+          {crop && preview && (
+            <button
+              type="button"
+              onClick={recrop}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <Icon name="crop" className="text-[14px]" /> Rogner
+            </button>
+          )}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -131,6 +218,7 @@ export function ImageUpload({
               onClick={() => {
                 onChange(undefined);
                 onFile?.(undefined);
+                setOriginal(null);
                 setError(null);
               }}
               className="text-xs font-semibold text-error hover:underline"

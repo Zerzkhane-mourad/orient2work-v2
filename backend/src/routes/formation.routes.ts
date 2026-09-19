@@ -69,6 +69,33 @@ formationRouter.get(
 );
 
 /**
+ * @route GET /formations/certificats
+ * @desc Certificats du jeune connecté : une entrée par formation validée.
+ *       Déclarée AVANT « /:id », pour la même raison que « /temoignages ».
+ * @access JEUNE
+ */
+formationRouter.get(
+  "/certificats",
+  authenticate,
+  requireJeune,
+  asyncHandler(controller.listCertificats),
+);
+
+/**
+ * @route GET /formations/:id/certificat
+ * @desc Certificat de réussite en PDF, rempli sur le modèle officiel.
+ *       404 tant que le test de la formation n'est pas réussi.
+ * @access JEUNE ayant validé la formation
+ */
+formationRouter.get(
+  "/:id/certificat",
+  authenticate,
+  requireJeune,
+  validate({ params: idParamSchema }),
+  asyncHandler(controller.downloadCertificat),
+);
+
+/**
  * @route GET /formations/medias/:id
  * @desc Illustration insérée dans le corps d'un cours.
  *

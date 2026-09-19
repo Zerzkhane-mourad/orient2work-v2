@@ -1,9 +1,10 @@
 /** Endpoints du profil entreprise et de l'annuaire public. */
 import { http } from "../client";
-import type { ApiEntreprise, ApiEntreprisePublic, Paginated } from "../types";
+import type { ApiEntreprise, ApiEntreprisePublic, EntrepriseThemeId, Paginated } from "../types";
 
 export interface UpdateEntrepriseInput {
   nom?: string;
+  theme?: EntrepriseThemeId;
   secteur?: string;
   ville?: string;
   siteWeb?: string;

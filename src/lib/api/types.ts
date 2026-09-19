@@ -166,12 +166,22 @@ export interface ApiEntreprise {
   emailResponsable: string;
   telephone: string;
   status: EntrepriseStatus;
+  /** Palette de l'espace entreprise — voir `features/entreprise/themes.ts`. */
+  theme: EntrepriseThemeId;
   offresPubliees: number;
 }
 
+export type EntrepriseThemeId =
+  | "marine"
+  | "emeraude"
+  | "ocean"
+  | "amethyste"
+  | "bordeaux"
+  | "ardoise";
+
 export type ApiEntreprisePublic = Omit<
   ApiEntreprise,
-  "responsable" | "emailResponsable" | "telephone"
+  "responsable" | "emailResponsable" | "telephone" | "theme"
 >;
 
 // ── Offre ────────────────────────────────────────────────────────────────────
@@ -384,6 +394,17 @@ export interface ApiFormationQuizResult {
   corrections: ApiQuizCorrection[];
 }
 
+/** Certificat d'une formation validée (lecture complète + test réussi). */
+export interface ApiCertificat {
+  formationId: string;
+  formation: string;
+  /** `O2W-CERT-2026-00042` — figée une fois attribuée. */
+  reference: string;
+  delivreLe: string;
+  /** Route protégée, relative à l'API : à ouvrir avec `openProtectedDocument`. */
+  url: string;
+}
+
 // ── Entretien ────────────────────────────────────────────────────────────────
 
 export interface ApiEntretien {
@@ -582,8 +603,13 @@ export interface ApiJourneeCreneaux {
 export interface ApiCalendrierSpontanee {
   entreprise: ApiEntrepriseOuverte;
   journees: ApiJourneeCreneaux[];
-  /** Demande déjà en attente auprès de cette entreprise. */
-  demandeEnCours: { id: string; date: string; heure: string } | null;
+  /** Demande en attente, ou entretien accepté à venir, auprès de cette entreprise. */
+  demandeEnCours: {
+    id: string;
+    date: string;
+    heure: string;
+    status: "en_attente" | "accepte";
+  } | null;
 }
 
 // ── Recherche globale ────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ import {
   useTransitionUI,
 } from "@/components/motion/transitions";
 import { LogoutButton } from "@/features/auth/logout-button";
+import { UnreadBadge } from "@/features/notifications/notification-item";
 import { cn } from "@/lib/utils";
 import {
   estActif,
@@ -43,9 +44,8 @@ import {
 /**
  * @param unread Nombre de notifications non lues, pour la pastille.
  *
- *   Passé par la coquille plutôt que relu ici : `useNotifications` déclenche un
- *   appel réseau, et l'appeler une seconde fois dans cette barre en doublerait
- *   la fréquence pour afficher le même nombre.
+ *   Passé par la coque, qui lit le fournisseur de notifications : la barre
+ *   reste un composant de présentation, utilisable sans lui.
  */
 export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
   const chemin = usePathname();
@@ -153,20 +153,10 @@ export function JeuneBottomNav({ unread = 0 }: { unread?: number }) {
                 )}
                 <span className="relative">
                   <Icon name={item.icon} filled={actif} className="text-2xl" />
-                  {alertes > 0 && (
-                    /*
-                     * Pastille chiffrée, posée sur l'icône. Le nombre est
-                     * VOLONTAIREMENT redondant avec `aria-label` : un lecteur
-                     * d'écran ne lira pas ce `span` décoratif au milieu du
-                     * libellé de l'onglet.
-                     */
-                    <span
-                      aria-hidden
-                      className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold leading-none text-on-error"
-                    >
-                      {alertes > 9 ? "9+" : alertes}
-                    </span>
-                  )}
+                  {/* Même pastille que la cloche du grand écran. Le nombre est
+                      VOLONTAIREMENT redondant avec `aria-label` : la pastille
+                      est décorative. */}
+                  <UnreadBadge count={alertes} />
                 </span>
                 <span className="truncate">{item.court ?? item.label}</span>
               </Link>

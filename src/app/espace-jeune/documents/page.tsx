@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import {
   Badge,
   Button,
+  ButtonLink,
   Card,
   CardBody,
   EmptyState,
@@ -15,6 +16,7 @@ import {
   SkeletonList,
   type IconName,
 } from "@/components/ui";
+import { CertificatButton } from "@/features/formations/certificat-button";
 import { api } from "@/lib/api";
 import { ApiError } from "@/lib/api/errors";
 import { openProtectedDocument } from "@/lib/api/media";
@@ -89,7 +91,7 @@ export default function MesDocumentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Mes documents"
-        subtitle="Gérez votre CV et les pièces jointes de vos candidatures."
+        subtitle="Gérez votre CV, vos pièces jointes et vos certificats de formation."
         actions={
           <Button
             variant="secondary"
@@ -218,14 +220,66 @@ export default function MesDocumentsPage() {
         </div>
       )}
 
-      {/* Les certificats de formation ne sont pas encore générés par l'API. */}
-      <Card className="border-dashed">
-        <CardBody className="flex items-center gap-3 text-sm text-on-surface-variant">
-          <Icon name="workspace_premium" className="text-secondary" />
-          Les certificats de formation téléchargeables arriveront prochainement. Vos formations
-          validées sont visibles sur votre profil.
-        </CardBody>
-      </Card>
+      <MesCertificats />
     </div>
+  );
+}
+
+/** Un certificat par formation validée — lecture complète puis test réussi. */
+function MesCertificats() {
+  const { data, loading, error, refetch } = useApi(() => api.formations.certificats(), []);
+
+  return (
+    <section id="certificats" className="space-y-3">
+      <h2 className="flex items-center gap-2 font-headline text-lg font-bold text-primary">
+        <Icon name="workspace_premium" className="text-secondary" /> Mes certificats
+      </h2>
+
+      {loading ? (
+        <SkeletonList count={2} />
+      ) : error ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : !data || data.length === 0 ? (
+        <Card className="border-dashed">
+          <CardBody className="flex flex-col items-start gap-3 text-sm text-on-surface-variant sm:flex-row sm:items-center">
+            <span className="flex-1">
+              Terminez une formation et réussissez son test pour obtenir votre certificat
+              nominatif.
+            </span>
+            <ButtonLink href="/espace-jeune/formations" variant="outline" size="sm">
+              Voir les formations
+            </ButtonLink>
+          </CardBody>
+        </Card>
+      ) : (
+        <Card>
+          <CardBody className="space-y-2">
+            {data.map((certificat) => (
+              <div
+                key={certificat.formationId}
+                className="flex flex-wrap items-center gap-4 rounded-lg p-3 transition-colors hover:bg-surface-container-low"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary-container text-on-secondary-container">
+                  <Icon name="workspace_premium" filled />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-on-surface">{certificat.formation}</p>
+                  <p className="text-xs text-on-surface-variant">
+                    Délivré le {formatDate(certificat.delivreLe)} • {certificat.reference}
+                  </p>
+                </div>
+                <CertificatButton
+                  formationId={certificat.formationId}
+                  formation={certificat.formation}
+                  label="Télécharger"
+                  variant="outline"
+                  size="sm"
+                />
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
+    </section>
   );
 }

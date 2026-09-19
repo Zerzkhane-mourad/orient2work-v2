@@ -19,11 +19,24 @@ export function listCreneauxOccupes(entrepriseId: string, jusquA: Date) {
   });
 }
 
-/** Une demande en attente par jeune et par entreprise — voir le service. */
+/**
+ * Réservation qui empêche le jeune d'en poser une autre chez cette entreprise :
+ * une demande en attente, ou un entretien ACCEPTÉ encore à venir.
+ *
+ * Sans l'entretien accepté, le jeune retrouvait tout le calendrier dès que
+ * l'entreprise avait répondu oui, et pouvait réserver un second créneau alors
+ * qu'il avait déjà son rendez-vous. Un entretien accepté passé ne bloque plus.
+ */
 export function findDemandeSpontaneeEnCours(entrepriseId: string, jeuneId: string) {
   return prisma.entretien.findFirst({
-    where: { entrepriseId, jeuneId, spontanee: true, status: "en_attente" },
-    select: { id: true, date: true, heure: true },
+    where: {
+      entrepriseId,
+      jeuneId,
+      spontanee: true,
+      OR: [{ status: "en_attente" }, { status: "accepte", date: { gte: debutDuJour() } }],
+    },
+    orderBy: [{ date: "asc" }, { heure: "asc" }],
+    select: { id: true, date: true, heure: true, status: true },
   });
 }
 

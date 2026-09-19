@@ -100,6 +100,7 @@ export function toNotification(api: ApiNotification): Notification {
     title: api.title,
     detail: api.detail,
     time: formatRelative(api.createdAt),
+    createdAt: api.createdAt,
     read: api.read,
     href: api.href,
     accent: api.accent,

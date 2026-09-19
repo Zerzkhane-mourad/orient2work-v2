@@ -105,6 +105,8 @@ export interface Notification {
   detail?: string;
   /** Libellé relatif calculé depuis `createdAt`. */
   time: string;
+  /** Date ISO d'origine — regroupement par jour et date complète au survol. */
+  createdAt: string;
   read: boolean;
   href?: string;
   /** Met en avant les événements importants. */

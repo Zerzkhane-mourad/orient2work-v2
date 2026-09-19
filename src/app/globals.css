@@ -216,6 +216,220 @@
   --chart-grille: #1e293a;
 }
 
+/* ── Thèmes de l'espace entreprise ───────────────────────────────────────────
+ *
+ * Choisis par l'entreprise dans ses paramètres (`features/entreprise/themes.ts`)
+ * et posés sur `<html>` par le layout de l'espace, en `data-theme-entreprise`.
+ * Sur `<html>` et non sur la coquille : les modales et menus rendus en portail
+ * dans `document.body` suivent ainsi le thème. « marine » = la palette `:root`.
+ *
+ * Valeurs CALCULÉES, pas choisies à l'œil : chaque jeton de la palette marine
+ * est converti en OKLCH, garde sa CLARTÉ, et prend la teinte du thème (famille
+ * primaire + surfaces) ou de son accent (famille secondaire), avec écrêtage au
+ * gamut sRGB. Les contrastes restent donc ceux de la palette de base — contrôlés
+ * pour chaque thème : on-secondary-container sur secondary-container ≥ 4,56:1
+ * (marine : 4,58:1), secondary sur blanc ≥ 6,1:1, on-surface sur surface ≥ 16:1.
+ */
+:root[data-theme-entreprise="emeraude"] {
+  --color-background: 245 251 251;
+  --color-surface: 245 251 251;
+  --color-surface-dim: 201 224 216;
+  --color-surface-bright: 245 251 251;
+  --color-surface-container-low: 235 247 244;
+  --color-surface-container: 225 243 238;
+  --color-surface-container-high: 215 238 231;
+  --color-surface-container-highest: 210 233 225;
+  --color-surface-variant: 210 233 225;
+  --color-surface-tint: 58 105 89;
+  --color-inverse-surface: 35 53 46;
+  --color-inverse-on-surface: 231 245 240;
+  --color-on-background: 14 32 25;
+  --color-on-surface: 14 32 25;
+  --color-primary: 1 38 25;
+  --color-primary-container: 1 38 25;
+  --color-on-primary-container: 98 146 129;
+  --color-inverse-primary: 160 211 194;
+  --color-primary-fixed: 197 237 224;
+  --color-primary-fixed-dim: 160 211 194;
+  --color-on-primary-fixed: 0 35 21;
+  --color-on-primary-fixed-variant: 33 81 65;
+  --color-secondary: 64 106 74;
+  --color-secondary-container: 169 238 183;
+  --color-on-secondary-container: 65 106 74;
+  --color-secondary-fixed: 190 242 199;
+  --color-secondary-fixed-dim: 151 218 165;
+  --color-on-secondary-fixed: 17 32 19;
+  --color-on-secondary-fixed-variant: 47 80 55;
+  --chart-etape-1: #012619;
+  --chart-etape-2: #01563c;
+  --chart-etape-3: #0a7555;
+  --chart-etape-4: #099e73;
+  --chart-etape-5: #5eba95;
+  --chart-barre: #0a7555;
+  --chart-piste: #cceede;
+  --chart-grille: #c6e5d6;
+}
+
+:root[data-theme-entreprise="ocean"] {
+  --color-background: 247 250 254;
+  --color-surface: 247 250 254;
+  --color-surface-dim: 201 221 233;
+  --color-surface-bright: 247 250 254;
+  --color-surface-container-low: 236 245 252;
+  --color-surface-container: 227 240 250;
+  --color-surface-container-high: 216 235 248;
+  --color-surface-container-highest: 210 230 242;
+  --color-surface-variant: 210 230 242;
+  --color-surface-tint: 56 101 121;
+  --color-inverse-surface: 33 51 59;
+  --color-inverse-on-surface: 231 243 250;
+  --color-on-background: 12 30 38;
+  --color-on-surface: 12 30 38;
+  --color-primary: 1 35 47;
+  --color-primary-container: 1 35 47;
+  --color-on-primary-container: 97 141 163;
+  --color-inverse-primary: 161 206 230;
+  --color-primary-fixed: 199 233 253;
+  --color-primary-fixed-dim: 161 206 230;
+  --color-on-primary-fixed: 0 32 42;
+  --color-on-primary-fixed-variant: 31 77 96;
+  --color-secondary: 54 104 105;
+  --color-secondary-container: 153 235 234;
+  --color-on-secondary-container: 54 105 105;
+  --color-secondary-fixed: 178 240 239;
+  --color-secondary-fixed-dim: 135 215 215;
+  --color-on-secondary-fixed: 12 31 31;
+  --color-on-secondary-fixed-variant: 39 79 79;
+  --chart-etape-1: #01232f;
+  --chart-etape-2: #015066;
+  --chart-etape-3: #0b6d8b;
+  --chart-etape-4: #0f93ba;
+  --chart-etape-5: #51b2d6;
+  --chart-barre: #0b6d8b;
+  --chart-piste: #c8ebfa;
+  --chart-grille: #c3e3f0;
+}
+
+:root[data-theme-entreprise="amethyste"] {
+  --color-background: 252 248 251;
+  --color-surface: 252 248 251;
+  --color-surface-dim: 222 214 230;
+  --color-surface-bright: 252 248 251;
+  --color-surface-container-low: 247 241 249;
+  --color-surface-container: 242 235 247;
+  --color-surface-container-high: 237 228 244;
+  --color-surface-container-highest: 231 223 239;
+  --color-surface-variant: 231 223 239;
+  --color-surface-tint: 103 84 127;
+  --color-inverse-surface: 51 46 59;
+  --color-inverse-on-surface: 244 239 248;
+  --color-on-background: 30 25 37;
+  --color-on-surface: 30 25 37;
+  --color-primary: 37 20 61;
+  --color-primary-container: 37 20 61;
+  --color-on-primary-container: 144 124 168;
+  --color-inverse-primary: 210 187 234;
+  --color-primary-fixed: 237 218 254;
+  --color-primary-fixed-dim: 210 187 234;
+  --color-on-primary-fixed: 33 17 57;
+  --color-on-primary-fixed-variant: 79 61 101;
+  --color-secondary: 107 81 135;
+  --color-secondary-container: 228 208 255;
+  --color-on-secondary-container: 107 81 135;
+  --color-secondary-fixed: 234 219 254;
+  --color-secondary-fixed-dim: 215 182 254;
+  --color-on-secondary-fixed: 31 22 43;
+  --color-on-secondary-fixed-variant: 81 60 102;
+  --chart-etape-1: #241738;
+  --chart-etape-2: #53357e;
+  --chart-etape-3: #704ea2;
+  --chart-etape-4: #9372c7;
+  --chart-etape-5: #af96dd;
+  --chart-barre: #704ea2;
+  --chart-piste: #e8dffd;
+  --chart-grille: #e0d7f3;
+}
+
+:root[data-theme-entreprise="bordeaux"] {
+  --color-background: 252 249 247;
+  --color-surface: 252 249 247;
+  --color-surface-dim: 230 213 213;
+  --color-surface-bright: 252 249 247;
+  --color-surface-container-low: 250 241 240;
+  --color-surface-container: 247 235 234;
+  --color-surface-container-high: 244 228 226;
+  --color-surface-container-highest: 239 222 221;
+  --color-surface-variant: 239 222 221;
+  --color-surface-tint: 131 76 80;
+  --color-inverse-surface: 58 45 46;
+  --color-inverse-on-surface: 248 238 238;
+  --color-on-background: 36 24 25;
+  --color-on-surface: 36 24 25;
+  --color-primary: 61 7 21;
+  --color-primary-container: 61 7 21;
+  --color-on-primary-container: 175 116 118;
+  --color-inverse-primary: 243 180 179;
+  --color-primary-fixed: 254 217 215;
+  --color-primary-fixed-dim: 243 180 179;
+  --color-on-primary-fixed: 56 5 19;
+  --color-on-primary-fixed-variant: 105 52 57;
+  --color-secondary: 140 75 43;
+  --color-secondary-container: 254 206 185;
+  --color-on-secondary-container: 140 75 44;
+  --color-secondary-fixed: 255 217 201;
+  --color-secondary-fixed-dim: 254 179 144;
+  --color-on-secondary-fixed: 45 20 9;
+  --color-on-secondary-fixed-variant: 106 55 30;
+  --chart-etape-1: #370f17;
+  --chart-etape-2: #7b2436;
+  --chart-etape-3: #a03d4f;
+  --chart-etape-4: #c66271;
+  --chart-etape-5: #de8993;
+  --chart-barre: #a03d4f;
+  --chart-piste: #ffdadd;
+  --chart-grille: #f5d3d6;
+}
+
+:root[data-theme-entreprise="ardoise"] {
+  --color-background: 249 249 252;
+  --color-surface: 249 249 252;
+  --color-surface-dim: 213 218 226;
+  --color-surface-bright: 249 249 252;
+  --color-surface-container-low: 242 243 248;
+  --color-surface-container: 235 238 244;
+  --color-surface-container-high: 228 232 240;
+  --color-surface-container-highest: 222 227 235;
+  --color-surface-variant: 222 227 235;
+  --color-surface-tint: 87 95 105;
+  --color-inverse-surface: 44 49 55;
+  --color-inverse-on-surface: 238 241 246;
+  --color-on-background: 23 28 33;
+  --color-on-surface: 23 28 33;
+  --color-primary: 24 32 41;
+  --color-primary-container: 24 32 41;
+  --color-on-primary-container: 127 135 146;
+  --color-inverse-primary: 191 199 211;
+  --color-primary-fixed: 221 227 237;
+  --color-primary-fixed-dim: 191 199 211;
+  --color-on-primary-fixed: 21 29 37;
+  --color-on-primary-fixed-variant: 64 71 81;
+  --color-secondary: 140 76 19;
+  --color-secondary-container: 254 207 176;
+  --color-on-secondary-container: 141 76 21;
+  --color-secondary-fixed: 254 219 196;
+  --color-secondary-fixed-dim: 254 180 128;
+  --color-on-secondary-fixed: 45 20 3;
+  --color-on-secondary-fixed-variant: 107 56 12;
+  --chart-etape-1: #182029;
+  --chart-etape-2: #384a5c;
+  --chart-etape-3: #51657b;
+  --chart-etape-4: #74889e;
+  --chart-etape-5: #96a7b9;
+  --chart-barre: #51657b;
+  --chart-piste: #dee5ed;
+  --chart-grille: #d7dde4;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

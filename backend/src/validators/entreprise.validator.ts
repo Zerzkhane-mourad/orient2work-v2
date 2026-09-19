@@ -10,10 +10,21 @@ import {
   urlSchema,
 } from "./common.validator.js";
 
+/** Thèmes de l'espace entreprise — miroir de `src/features/entreprise/themes.ts`. */
+export const ENTREPRISE_THEMES = [
+  "marine",
+  "emeraude",
+  "ocean",
+  "amethyste",
+  "bordeaux",
+  "ardoise",
+] as const;
+
 /** `status` volontairement absent : une entreprise ne s'auto-valide pas. */
 export const updateEntrepriseSchema = z
   .object({
     nom: shortText(120).optional(),
+    theme: z.enum(ENTREPRISE_THEMES).optional(),
     secteur: shortText(120).optional(),
     ville: shortText(80).optional(),
     siteWeb: urlSchema.optional(),

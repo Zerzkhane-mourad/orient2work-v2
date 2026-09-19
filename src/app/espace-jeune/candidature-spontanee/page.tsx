@@ -277,13 +277,32 @@ function DetailEntreprise({
           ) : calendrier.error ? (
             <ErrorState error={calendrier.error} onRetry={calendrier.refetch} />
           ) : calendrier.data?.demandeEnCours ? (
-            /* Une seule demande en attente par entreprise : le serveur refuse la
-               seconde, autant l'expliquer plutôt que de laisser réserver. */
-            <p className="flex items-start gap-2 rounded-lg bg-secondary-container px-4 py-3 text-sm text-on-secondary-container">
-              <Icon name="schedule" className="mt-0.5 shrink-0 text-[18px]" />
-              Vous avez déjà une demande en attente auprès de cette entreprise, le{" "}
-              {calendrier.data.demandeEnCours.date} à {calendrier.data.demandeEnCours.heure}.
-            </p>
+            /* Une seule réservation active par entreprise — en attente ou déjà
+               acceptée : le serveur refuse la seconde, autant l'expliquer
+               plutôt que de proposer des créneaux. */
+            <div className="space-y-3">
+              <p className="flex items-start gap-2 rounded-lg bg-secondary-container px-4 py-3 text-sm text-on-secondary-container">
+                <Icon
+                  name={
+                    calendrier.data.demandeEnCours.status === "accepte"
+                      ? "event_available"
+                      : "schedule"
+                  }
+                  className="mt-0.5 shrink-0 text-[18px]"
+                />
+                {calendrier.data.demandeEnCours.status === "accepte"
+                  ? "Votre entretien avec cette entreprise est confirmé, le "
+                  : "Vous avez déjà une demande en attente auprès de cette entreprise, le "}
+                {jourCourt(calendrier.data.demandeEnCours.date)} à{" "}
+                {calendrier.data.demandeEnCours.heure}.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => window.location.assign("/espace-jeune/entretiens")}
+              >
+                <Icon name="event" className="text-[18px]" /> Voir mes entretiens
+              </Button>
+            </div>
           ) : (
             calendrier.data && (
               <CreneauPicker

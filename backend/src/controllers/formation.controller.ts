@@ -4,6 +4,7 @@ import { ValidationError } from "../lib/errors.js";
 import { currentActor } from "../middlewares/authorize.js";
 import { body, params, query } from "../middlewares/validate.js";
 import { paginationSchema } from "../lib/pagination.js";
+import * as certificatService from "../services/certificat.service.js";
 import * as formationService from "../services/formation.service.js";
 import type {
   CreateAvisInput,
@@ -139,6 +140,24 @@ export async function getImage(req: Request, res: Response): Promise<void> {
   // l'URL reste stable, on laisse donc le navigateur revalider.
   res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
   res.sendFile(target.absolutePath);
+}
+
+// ── Certificats ──────────────────────────────────────────────────────────────
+
+export async function listCertificats(req: Request, res: Response): Promise<void> {
+  sendSuccess(res, await certificatService.list(currentActor(req)));
+}
+
+/** PDF généré à la volée ; `private, no-store` : il porte le nom du jeune. */
+export async function downloadCertificat(req: Request, res: Response): Promise<void> {
+  const { id } = params<{ id: string }>(req);
+  const { filename, content } = await certificatService.download(currentActor(req), id);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(Buffer.from(content));
 }
 
 // ── Quiz : édition question par question ─────────────────────────────────────

@@ -812,6 +812,48 @@ paths:
         "200": { description: Formation }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /formations/certificats:
+    get:
+      tags: [Formations]
+      summary: Certificats du jeune connecté
+      description: |
+        Une entrée par formation validée (lecture complète + test réussi). Le
+        numéro de certificat est attribué à la première consultation, puis figé.
+      responses:
+        "200":
+          description: Certificats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    formationId: { type: string, format: uuid }
+                    formation: { type: string }
+                    reference: { type: string, example: O2W-CERT-2026-00042 }
+                    delivreLe: { type: string, format: date-time }
+                    url: { type: string, example: /api/v1/formations/{id}/certificat }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /formations/{id}/certificat:
+    get:
+      tags: [Formations]
+      summary: Télécharger le certificat de réussite (PDF)
+      description: |
+        PDF généré à la volée sur le modèle officiel : nom du jeune, titre de la
+        formation, date de réussite et référence `O2W-CERT-AAAA-NNNNN`.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Certificat
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Formation non validée par ce jeune }
+
   /formations/{id}/progression:
     put:
       tags: [Formations]
@@ -2106,12 +2148,19 @@ components:
         emailResponsable: { type: string, description: "Absent de la vue publique" }
         telephone: { type: string, description: "Absent de la vue publique" }
         status: { $ref: "#/components/schemas/EntrepriseStatus" }
+        theme: { $ref: "#/components/schemas/EntrepriseTheme" }
         offresPubliees: { type: integer }
+
+    EntrepriseTheme:
+      type: string
+      description: "Palette de l'espace entreprise. Absent de la vue publique."
+      enum: [marine, emeraude, ocean, amethyste, bordeaux, ardoise]
 
     UpdateEntreprise:
       type: object
       properties:
         nom: { type: string }
+        theme: { $ref: "#/components/schemas/EntrepriseTheme" }
         secteur: { type: string }
         ville: { type: string }
         siteWeb: { type: string, format: uri }

@@ -268,6 +268,10 @@ model Entreprise {
   emailResponsable String           @default("")
   telephone        String           @default("")
   status           EntrepriseStatus @default(inscrit)
+  /// Palette de l'espace entreprise, choisie dans les paramètres.
+  /// Chaîne plutôt qu'enum : ajouter un thème ne demande aucune migration,
+  /// la liste autorisée vit dans `entreprise.validator.ts`.
+  theme            String           @default("marine")
 
   /// Ouvre la prise de rendez-vous spontanée aux jeunes validés (§10).
   /// Fermé par défaut : une entreprise ne reçoit de demandes que si elle l'a décidé.
@@ -476,6 +480,9 @@ model FormationProgress {
   valide        Boolean   @default(false)
   valideAt      DateTime?
   meilleurScore Int?
+  /// Numéro du certificat (O2W-CERT-AAAA-NNNNN), tiré de la séquence
+  /// `certificat_numero_seq` à la première consultation d'une formation validée.
+  certificatNumero Int? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

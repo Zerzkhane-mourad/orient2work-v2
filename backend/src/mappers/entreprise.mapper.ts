@@ -14,13 +14,15 @@ export interface EntrepriseDto {
   emailResponsable: string;
   telephone: string;
   status: EntrepriseStatus;
+  /** Palette de l'espace entreprise (préférence d'interface). */
+  theme: string;
   offresPubliees: number;
 }
 
-/** Vue publique : ni contact du responsable, ni téléphone. */
+/** Vue publique : ni contact du responsable, ni téléphone, ni préférence d'interface. */
 export type EntreprisePublicDto = Omit<
   EntrepriseDto,
-  "emailResponsable" | "telephone" | "responsable"
+  "emailResponsable" | "telephone" | "responsable" | "theme"
 >;
 
 export function toEntrepriseDto(entreprise: EntrepriseFull): EntrepriseDto {
@@ -36,6 +38,7 @@ export function toEntrepriseDto(entreprise: EntrepriseFull): EntrepriseDto {
     emailResponsable: entreprise.emailResponsable,
     telephone: entreprise.telephone,
     status: entreprise.status,
+    theme: entreprise.theme,
     offresPubliees: entreprise._count.offres,
   };
 }
@@ -45,6 +48,7 @@ export function toEntreprisePublicDto(entreprise: EntrepriseFull): EntreprisePub
     emailResponsable: _email,
     telephone: _telephone,
     responsable: _responsable,
+    theme: _theme,
     ...rest
   } = toEntrepriseDto(entreprise);
   return rest;

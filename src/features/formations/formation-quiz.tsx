@@ -11,6 +11,7 @@ import {
   ProgressRing,
 } from "@/components/ui";
 import { useProfileOptional } from "@/features/jeune/profil/profile-store";
+import { CertificatButton } from "./certificat-button";
 import { api } from "@/lib/api";
 import type { ApiFormation, ApiFormationQuizResult } from "@/lib/api/types";
 import { useMutation } from "@/lib/api/use-api";
@@ -22,6 +23,8 @@ type Phase = "intro" | "running" | "result";
 
 interface FormationQuizProps {
   formationId: string;
+  /** Titre de la formation, pour nommer le certificat téléchargé. */
+  formationTitre: string;
   quiz: Quiz;
   /** The quiz only opens once the course has been read through. */
   unlocked: boolean;
@@ -38,7 +41,12 @@ interface FormationQuizProps {
  * Le parcours devient : répondre à tout → soumettre → correction détaillée,
  * question par question, avec les explications.
  */
-export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProps) {
+export function FormationQuiz({
+  formationId,
+  formationTitre,
+  quiz,
+  unlocked,
+}: FormationQuizProps) {
   const total = quiz.questions.length;
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -246,9 +254,18 @@ export function FormationQuiz({ formationId, quiz, unlocked }: FormationQuizProp
                 </p>
               )}
             </div>
-            <Button variant={result.reussi ? "outline" : "secondary"} onClick={restart}>
-              <Icon name="replay" className="text-[18px]" /> Recommencer
-            </Button>
+            <div className="flex flex-wrap items-start justify-center gap-3">
+              {result.reussi && (
+                <CertificatButton
+                  formationId={formationId}
+                  formation={formationTitre}
+                  variant="secondary"
+                />
+              )}
+              <Button variant={result.reussi ? "outline" : "secondary"} onClick={restart}>
+                <Icon name="replay" className="text-[18px]" /> Recommencer
+              </Button>
+            </div>
           </div>
 
           {/* Correction détaillée, renvoyée par le serveur */}

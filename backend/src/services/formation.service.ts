@@ -403,8 +403,8 @@ export async function submitQuiz(
         userId: jeune.userId,
         icon: "workspace_premium",
         title: `Formation « ${formation.titre} » validée`,
-        detail: `Score : ${score}%. Votre score d'employabilité progresse.`,
-        href: "/espace-jeune/formations",
+        detail: `Score : ${score}%. Votre certificat est disponible dans vos documents.`,
+        href: "/espace-jeune/documents",
         accent: true,
       });
     }

@@ -17,7 +17,11 @@ import { buildParcours } from "@/features/jeune/parcours";
 import { ParcoursTracker } from "@/features/jeune/parcours-tracker";
 import { ProfileSummaryCard } from "@/features/jeune/profile-summary-card";
 import { useProfile } from "@/features/jeune/profil/profile-store";
-import { useNotifications } from "@/features/notifications/use-notifications";
+import {
+  NotificationItem,
+  NotificationItemSkeleton,
+} from "@/features/notifications/notification-item";
+import { useNotifications } from "@/features/notifications/notifications-store";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/api/use-api";
 import { QUIZ_PASS_SCORE } from "@/lib/constants";
@@ -25,7 +29,7 @@ import { formatDate } from "@/lib/utils";
 
 export default function EspaceJeuneDashboard() {
   const { jeune } = useProfile();
-  const { notifications } = useNotifications(4);
+  const notifs = useNotifications();
 
   const offres = useApi(() => api.offres.list({ perPage: 5 }), []);
   const entretiens = useApi(() => api.entretiens.list({ status: "accepte", perPage: 5 }), []);
@@ -298,54 +302,51 @@ export default function EspaceJeuneDashboard() {
             </Card>
           )}
 
-          <Card>
-            <CardBody className="p-4 sm:p-6">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h4 className="truncate font-bold text-primary">Notifications</h4>
-                <ButtonLink
-                  href="/espace-jeune/notifications"
-                  variant="ghost"
-                  size="sm"
-                  className="px-0"
-                >
-                  Tout voir
-                </ButtonLink>
-              </div>
-              <div className="space-y-1">
-                {notifications.length === 0 ? (
-                  <p className="py-2 text-sm text-on-surface-variant">Aucune notification.</p>
-                ) : (
-                  notifications.slice(0, 4).map((n) => (
-                    <ButtonLink
-                      key={n.id}
-                      href={n.href ?? "/espace-jeune/notifications"}
-                      variant="ghost"
-                      /* `min-h-11` : ces lignes sont des liens, et au doigt une
-                         cible de 36 px se manque une fois sur trois. `truncate`
-                         retiré d'ici — posé sur le conteneur flex, il ne
-                         raccourcissait rien et empêchait le titre de passer à
-                         la ligne. */
-                      className="flex min-h-11 w-full items-start gap-3 rounded-lg p-2 text-left hover:bg-surface-container-low"
-                    >
-                      <span
-                        className={`mt-0.5 ${n.accent ? "text-secondary" : "text-on-surface-variant"}`}
-                      >
-                        <Icon name={n.icon} className="text-[18px]" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium leading-snug text-on-surface">
-                          {n.title}
-                        </span>
-                        <span className="block text-xs text-on-surface-variant">{n.time}</span>
-                      </span>
-                      {!n.read && (
-                        <span className="ml-auto mt-1.5 h-2 w-2 shrink-0 rounded-full bg-secondary" />
-                      )}
-                    </ButtonLink>
-                  ))
+          {/* Même ligne que la cloche et la page : une notification se
+              reconnaît d'un écran à l'autre. Les lignes vont d'un bord à
+              l'autre de la carte, d'où l'en-tête seul dans `CardBody`. */}
+          <Card className="overflow-hidden">
+            <CardBody className="flex items-center justify-between gap-2 p-4 pb-2 sm:px-6 sm:pt-6">
+              <h4 className="flex min-w-0 items-center gap-2 font-bold text-primary">
+                <span className="truncate">Notifications</span>
+                {notifs.unread > 0 && (
+                  <span className="rounded-full bg-error-container px-2 py-0.5 text-xs font-bold text-on-error-container">
+                    {notifs.unread}
+                  </span>
                 )}
-              </div>
+              </h4>
+              <ButtonLink
+                href="/espace-jeune/notifications"
+                variant="ghost"
+                size="sm"
+                className="px-2"
+              >
+                Tout voir
+              </ButtonLink>
             </CardBody>
+            {notifs.loading ? (
+              <ul aria-label="Chargement des notifications" className="pb-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <NotificationItemSkeleton key={i} density="compact" />
+                ))}
+              </ul>
+            ) : notifs.notifications.length === 0 ? (
+              <p className="px-4 pb-5 text-sm text-on-surface-variant sm:px-6">
+                Vous êtes à jour — aucune notification pour l&apos;instant.
+              </p>
+            ) : (
+              <ul className="divide-y divide-outline-variant border-t border-outline-variant">
+                {notifs.notifications.slice(0, 4).map((n) => (
+                  <NotificationItem
+                    key={n.id}
+                    notification={n}
+                    density="compact"
+                    onOpen={() => void notifs.markRead(n.id)}
+                    className="sm:px-6"
+                  />
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card>

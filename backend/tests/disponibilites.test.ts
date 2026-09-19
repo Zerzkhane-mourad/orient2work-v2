@@ -93,6 +93,27 @@ describe("Créneaux ouverts", () => {
     expect(journees[0]!.creneaux).toEqual(["09:00", "10:00", "10:30", "11:30"]);
   });
 
+  it("retire aussi les créneaux chevauchés par un entretien hors grille", () => {
+    // 10:15 (entretien proposé depuis une offre) empiète sur 10:00 et 10:30.
+    const journees = creneauxOuverts({
+      ...base,
+      dates: [LUNDI_MATIN],
+      reserves: [{ date: "2026-08-17", heure: "10:15" }],
+    });
+    expect(journees[0]!.creneaux).toEqual(["09:00", "09:30", "11:00", "11:30"]);
+  });
+
+  it("n'étend pas un entretien aligné au créneau voisin", () => {
+    // 09:30 finit à 10:00 : le créneau de 10:00 reste libre (borne exclue).
+    const journees = creneauxOuverts({
+      ...base,
+      dates: [LUNDI_MATIN],
+      reserves: [{ date: "2026-08-17", heure: "09:30" }],
+    });
+    expect(journees[0]!.creneaux).toContain("10:00");
+    expect(journees[0]!.creneaux).toContain("09:00");
+  });
+
   it("écarte les créneaux passés du jour même", () => {
     // Mercredi 8h00, journée programmée 07:00–10:00 : 07:00 et 07:30 sont passés,
     // 08:00 est en cours donc écarté aussi.

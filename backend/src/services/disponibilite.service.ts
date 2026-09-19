@@ -249,8 +249,13 @@ export async function listEntreprisesOuvertes(
 export interface CalendrierDto {
   entreprise: EntrepriseOuverteDto;
   journees: JourneeCreneaux[];
-  /** Demande déjà en attente auprès de cette entreprise, s'il y en a une. */
-  demandeEnCours: { id: string; date: string; heure: string } | null;
+  /** Demande en attente, ou entretien accepté à venir, auprès de cette entreprise. */
+  demandeEnCours: {
+    id: string;
+    date: string;
+    heure: string;
+    status: "en_attente" | "accepte";
+  } | null;
 }
 
 export async function getCalendrier(actor: Actor, entrepriseId: string): Promise<CalendrierDto> {
@@ -293,7 +298,12 @@ export async function getCalendrier(actor: Actor, entrepriseId: string): Promise
     },
     journees,
     demandeEnCours: enCours
-      ? { id: enCours.id, date: dateIsoUtc(enCours.date), heure: enCours.heure }
+      ? {
+          id: enCours.id,
+          date: dateIsoUtc(enCours.date),
+          heure: enCours.heure,
+          status: enCours.status === "accepte" ? "accepte" : "en_attente",
+        }
       : null,
   };
 }
@@ -315,10 +325,14 @@ export async function reserverCreneau(
 
   const calendrier = await getCalendrier(actor, entrepriseId);
 
-  // Une seule demande en attente à la fois : sans cela, un candidat pourrait
+  // Une seule réservation active à la fois : sans cela, un candidat pourrait
   // bloquer plusieurs créneaux de la même entreprise.
   if (calendrier.demandeEnCours) {
-    throw new ConflictError("Vous avez déjà une demande en attente auprès de cette entreprise.");
+    throw new ConflictError(
+      calendrier.demandeEnCours.status === "accepte"
+        ? "Vous avez déjà un entretien confirmé avec cette entreprise."
+        : "Vous avez déjà une demande en attente auprès de cette entreprise.",
+    );
   }
 
   const journee = calendrier.journees.find((j) => j.date === input.date);

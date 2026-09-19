@@ -12,9 +12,15 @@ import {
   ProtectedImage,
   StatusBadge,
 } from "@/components/ui";
+import type { CropSettings } from "@/components/ui/image-cropper";
 import { useProfile } from "./profile-store";
 
 type Editing = "none" | "identity" | "photo" | "banniere";
+
+/** Photo : cadre rond, carré de 512 px — la taille d'affichage la plus grande est 112 px. */
+const PHOTO_CROP: CropSettings = { aspect: 1, shape: "round", outputWidth: 512 };
+/** Bannière : même proportion que le bandeau du profil, 1600 px de large. */
+const BANNIERE_CROP: CropSettings = { aspect: 4, shape: "rect", outputWidth: 1600 };
 
 /** Profile header: cover banner, avatar, identity and contact details. */
 export function IdentitySection() {
@@ -27,6 +33,8 @@ export function IdentitySection() {
   // Fichiers d'origine : c'est ce que l'API attend, pas la data URL d'aperçu.
   const [photoFile, setPhotoFile] = useState<File | undefined>();
   const [banniereFile, setBanniereFile] = useState<File | undefined>();
+  // Tant que le rogneur est ouvert, le recadrage n'est pas encore appliqué.
+  const [cropping, setCropping] = useState(false);
 
   const close = () => setEditing("none");
 
@@ -37,11 +45,13 @@ export function IdentitySection() {
   const openPhoto = () => {
     setPhotoDraft(jeune.photo);
     setPhotoFile(undefined);
+    setCropping(false);
     setEditing("photo");
   };
   const openBanniere = () => {
     setBanniereDraft(jeune.banniere);
     setBanniereFile(undefined);
+    setCropping(false);
     setEditing("banniere");
   };
 
@@ -204,7 +214,7 @@ export function IdentitySection() {
             </Button>
             <Button
               variant="secondary"
-              disabled={!photoFile}
+              disabled={!photoFile || cropping}
               onClick={() => {
                 if (photoFile) void uploadPhoto(photoFile);
                 close();
@@ -222,6 +232,8 @@ export function IdentitySection() {
           shape="circle"
           maxWidth={512}
           maxHeight={512}
+          crop={PHOTO_CROP}
+          onCroppingChange={setCropping}
           emptyLabel="Ajouter une photo"
           hint="JPG, PNG ou WebP — 5 Mo max."
         />
@@ -232,7 +244,7 @@ export function IdentitySection() {
         open={editing === "banniere"}
         onClose={close}
         title="Bannière du profil"
-        description="Une image large (environ 1200 × 300) donne le meilleur rendu."
+        description="Choisissez une image puis cadrez-la au format du bandeau (4:1)."
         footer={
           <>
             <Button variant="ghost" onClick={close}>
@@ -240,7 +252,7 @@ export function IdentitySection() {
             </Button>
             <Button
               variant="secondary"
-              disabled={!banniereFile}
+              disabled={!banniereFile || cropping}
               onClick={() => {
                 if (banniereFile) void uploadBanniere(banniereFile);
                 close();
@@ -258,6 +270,8 @@ export function IdentitySection() {
           shape="wide"
           maxWidth={1600}
           maxHeight={500}
+          crop={BANNIERE_CROP}
+          onCroppingChange={setCropping}
           emptyLabel="Ajouter une bannière"
           hint="Sans image, le dégradé Orient2Work est utilisé."
         />

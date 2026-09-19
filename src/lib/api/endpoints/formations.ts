@@ -3,6 +3,7 @@ import { http } from "../client";
 import type {
   ApiAvis,
   ApiAvisList,
+  ApiCertificat,
   ApiFormation,
   ApiFormationQuizResult,
   ApiFormationSummary,
@@ -47,6 +48,9 @@ export const formationsApi = {
    */
   submitQuiz: (id: string, reponses: QuizAnswer[]) =>
     http.post<ApiFormationQuizResult>(`/formations/${id}/quiz`, { reponses }),
+
+  /** Une entrée par formation validée par le jeune connecté. */
+  certificats: () => http.get<ApiCertificat[]>("/formations/certificats"),
 
   listAvis: (id: string, page = 1, perPage = 20) =>
     http.get<ApiAvisList>(`/formations/${id}/avis`, { page, perPage }),

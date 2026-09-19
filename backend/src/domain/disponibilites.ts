@@ -1,21 +1,4 @@
-/**
- * Créneaux réservables, déduits des DATES programmées par l'entreprise.
- *
- * L'entreprise ouvre des journées précises et leur donne des horaires ; les
- * créneaux concrets en sont calculés à la demande. Les matérialiser en base
- * obligerait à les régénérer au moindre changement d'horaire.
- *
- * Il n'y a plus de semaine type : une journée est ouverte parce qu'elle a été
- * programmée, point. Une date absente n'est pas réservable — inutile, donc, de
- * pouvoir « fermer » une date : il suffit de ne pas la programmer.
- *
- * Tout est traité en heures LOCALES sous forme de chaînes (`YYYY-MM-DD`,
- * `HH:MM`), comme le fait déjà `Entretien` (`@db.Date` + `heure` texte).
- * Convertir en `Date` UTC ferait glisser un créneau de 9h00 d'une heure au
- * changement d'heure, ou le ferait changer de jour près de minuit.
- */
 
-/** Plage horaire ouverte : « de 9h00 à 12h00 ». */
 export interface PlageHoraire {
   debut: string;
   fin: string;
@@ -35,9 +18,7 @@ export interface CreneauReserve {
 }
 
 export interface JourneeCreneaux {
-  /** `YYYY-MM-DD`. */
   date: string;
-  /** Heures encore libres, ordonnées. */
   creneaux: string[];
 }
 
@@ -149,8 +130,23 @@ export function creneauxOuverts({
 }: Params): JourneeCreneaux[] {
   if (dureeMin <= 0 || semaines <= 0 || dates.length === 0) return [];
 
-  // Recherche en O(1) : la liste des réservations peut être longue.
-  const pris = new Set(reserves.map((r) => `${r.date}T${r.heure}`));
+  /*
+   * Réservations groupées par jour, en minutes.
+   *
+   * Un entretien bloque tout créneau qu'il CHEVAUCHE, pas seulement celui qui
+   * commence à la même minute : un entretien proposé depuis une offre à 10:15,
+   * ou réservé avant un changement de durée, tombe hors de la grille — une
+   * égalité stricte laissait alors 10:00 et 10:30 réservables par-dessus.
+   * L'entretien est supposé durer un créneau.
+   */
+  const pris = new Map<string, number[]>();
+  for (const r of reserves) {
+    const minute = enMinutes(r.heure);
+    if (minute < 0) continue;
+    pris.set(r.date, [...(pris.get(r.date) ?? []), minute]);
+  }
+  const occupe = (date: string, minute: number): boolean =>
+    (pris.get(date) ?? []).some((debut) => Math.abs(debut - minute) < dureeMin);
 
   const aujourdhui = dateLocale(maintenant);
   const minutesActuelles = maintenant.getHours() * 60 + maintenant.getMinutes();
@@ -186,9 +182,8 @@ export function creneauxOuverts({
         // Aujourd'hui, un créneau déjà commencé n'est plus réservable.
         if (journee.date === aujourdhui && minute <= minutesActuelles) continue;
 
-        const heure = enHeure(minute);
-        if (pris.has(`${journee.date}T${heure}`)) continue;
-        heures.add(heure);
+        if (occupe(journee.date, minute)) continue;
+        heures.add(enHeure(minute));
       }
     }
 

@@ -71,10 +71,11 @@ interface AppShellProps {
   homeHref: string;
   roleLabel: string;
   /**
-   * Écran de notifications de l'espace, s'il en a un : la cloche de l'en-tête
-   * n'est rendue que dans ce cas. Voir le commentaire au point de rendu.
+   * Actions propres à l'espace, posées dans l'en-tête avant le compte — la
+   * cloche de notifications de l'Espace Entreprise, par exemple. La coque ne
+   * connaît pas les fonctionnalités : elle leur réserve seulement la place.
    */
-  notificationsHref?: string;
+  headerActions?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -287,7 +288,7 @@ export function AppShell({
   user,
   homeHref,
   roleLabel,
-  notificationsHref,
+  headerActions,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -489,26 +490,12 @@ export function AppShell({
 
           <div className="ml-auto flex items-center gap-2">
             {/*
-              La cloche n'apparaît que si l'espace a un écran de notifications à
-              montrer.
-
-              Elle était rendue partout, sans `onClick` ni `href` : un bouton
-              présent sur CHAQUE page de l'administration, qu'on essaie une
-              fois, deux fois, avant de conclure que l'interface est cassée. Ni
-              l'administration ni l'Espace Entreprise n'ont d'écran de
-              notifications aujourd'hui — le jour où l'un en aura, il passera
-              `notificationsHref` et la cloche reviendra, fonctionnelle.
+              Rien par défaut : une cloche rendue partout sans rien derrière
+              — c'était le cas dans l'administration — est un bouton qu'on
+              essaie deux fois avant de conclure que l'interface est cassée.
+              Seul l'espace qui a des notifications à montrer passe la sienne.
             */}
-            {notificationsHref && (
-              <Link
-                href={notificationsHref}
-                className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
-                aria-label="Notifications"
-                title="Notifications"
-              >
-                <Icon name="notifications" />
-              </Link>
-            )}
+            {headerActions}
             <div className="flex items-center gap-3 border-l border-outline-variant pl-3">
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-semibold leading-tight text-on-surface">{user.name}</p>

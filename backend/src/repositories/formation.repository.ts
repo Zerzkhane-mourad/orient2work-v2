@@ -196,6 +196,58 @@ export function upsertProgress(
   });
 }
 
+// ── Certificats ──────────────────────────────────────────────────────────────
+
+const certificatInclude = {
+  formation: { select: { id: true, titre: true } },
+  jeune: { select: { prenom: true, nom: true } },
+} satisfies Prisma.FormationProgressInclude;
+
+export type ProgressCertifiee = Prisma.FormationProgressGetPayload<{
+  include: typeof certificatInclude;
+}>;
+
+export function listProgressValidees(jeuneId: string): Promise<ProgressCertifiee[]> {
+  return prisma.formationProgress.findMany({
+    where: { jeuneId, valide: true },
+    include: certificatInclude,
+    orderBy: { valideAt: "desc" },
+  });
+}
+
+export function findProgressValidee(
+  jeuneId: string,
+  formationId: string,
+): Promise<ProgressCertifiee | null> {
+  return prisma.formationProgress.findFirst({
+    where: { jeuneId, formationId, valide: true },
+    include: certificatInclude,
+  });
+}
+
+/**
+ * Attribue un numéro de certificat s'il n'en a pas encore.
+ *
+ * `nextval` garantit l'unicité sous concurrence ; la condition `IS NULL` garantit
+ * qu'un certificat ne change jamais de numéro une fois délivré.
+ */
+export async function attribuerNumeroCertificat(progressId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<{ certificatNumero: number }[]>`
+    UPDATE "formation_progress"
+    SET "certificatNumero" = nextval('certificat_numero_seq')
+    WHERE "id" = ${progressId}::uuid AND "certificatNumero" IS NULL
+    RETURNING "certificatNumero"
+  `;
+  if (rows[0]) return rows[0].certificatNumero;
+
+  // Déjà attribué, éventuellement par une requête concurrente.
+  const existing = await prisma.formationProgress.findUniqueOrThrow({
+    where: { id: progressId },
+    select: { certificatNumero: true },
+  });
+  return existing.certificatNumero!;
+}
+
 export function countFormationsValidees(jeuneId: string) {
   return prisma.formationProgress.count({ where: { jeuneId, valide: true } });
 }
