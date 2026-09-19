@@ -26,6 +26,8 @@ const values = [
   },
 ] as const;
 
+// Section « forums » masquée pour l'instant (voir le bloc commenté plus bas).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const forumPhases = [
   {
     title: "Avant le forum",
