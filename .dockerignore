@@ -1,0 +1,11 @@
+node_modules
+.next
+backend
+.git
+.claude
+.agents
+scripts
+.env
+.env*.local
+*.log
+*.tsbuildinfo
