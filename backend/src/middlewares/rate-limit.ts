@@ -54,6 +54,20 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Renouvellement de session (`/auth/refresh`).
+ *
+ * Séparé de `authLimiter` : un refresh token (256 bits aléatoires) ne se devine
+ * pas, il n'y a rien à bruteforcer. Chaque chargement de page déclenche un
+ * refresh ; les compter avec les tentatives de connexion déconnectait
+ * l'utilisateur au 11e rechargement. Le plafond reste là contre l'abus.
+ */
+export const refreshLimiter = rateLimit({
+  ...shared,
+  windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
+  limit: 100,
+});
+
+/**
  * Renvoi d'email d'authentification (vérification d'adresse, reset).
  *
  * Chaque appel à `rateLimit()` crée son PROPRE compteur : les trois limiteurs

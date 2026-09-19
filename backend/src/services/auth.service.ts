@@ -220,7 +220,7 @@ export async function refresh(token: string, context: SessionContext): Promise<A
     throw new UnauthenticatedError("Session invalide.", "TOKEN_INVALID");
   }
 
-  if (stored.revokedAt) {
+  if (stored.revokedAt && !isRecentRotation(stored)) {
     // Un token déjà consommé qui revient = le cookie a fuité et est rejoué.
     // On coupe toutes les sessions du compte plutôt que de laisser cohabiter
     // l'utilisateur légitime et l'attaquant.
@@ -241,10 +241,28 @@ export async function refresh(token: string, context: SessionContext): Promise<A
   }
 
   const session = await issueSession(stored.user, context);
-  const replacement = await userRepository.findRefreshToken(hashToken(session.refreshToken));
-  await userRepository.revokeRefreshToken(stored.id, replacement?.id);
+
+  // Dans le délai de grâce, le token est déjà révoqué : on ne le retourne pas
+  // une seconde fois, et son remplaçant reste valide (un autre onglet peut le
+  // détenir).
+  if (!stored.revokedAt) {
+    const replacement = await userRepository.findRefreshToken(hashToken(session.refreshToken));
+    await userRepository.revokeRefreshToken(stored.id, replacement?.id);
+  }
 
   return session;
+}
+
+/**
+ * Le token a-t-il été tourné il y a quelques secondes à peine ?
+ *
+ * C'est la signature d'une rotation dont la réponse s'est perdue, pas d'un vol :
+ * un attaquant devrait rejouer le cookie dans cette fenêtre très courte. Un
+ * token révoqué par déconnexion n'a pas de remplaçant et n'en profite jamais.
+ */
+function isRecentRotation(token: { revokedAt: Date | null; replacedById: string | null }): boolean {
+  if (!token.revokedAt || !token.replacedById) return false;
+  return Date.now() - token.revokedAt.getTime() < env.REFRESH_REUSE_GRACE_SECONDS * 1000;
 }
 
 export async function logout(token: string | undefined): Promise<void> {

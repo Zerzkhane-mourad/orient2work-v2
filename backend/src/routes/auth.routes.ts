@@ -10,7 +10,7 @@ import * as controller from "../controllers/auth.controller.js";
 import { asyncHandler } from "../lib/http.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { verifyCsrf } from "../middlewares/csrf.js";
-import { authLimiter, emailLimiter } from "../middlewares/rate-limit.js";
+import { authLimiter, emailLimiter, refreshLimiter } from "../middlewares/rate-limit.js";
 import { validate } from "../middlewares/validate.js";
 import {
   changePasswordSchema,
@@ -70,7 +70,7 @@ authRouter.post(
  * @access Cookie de session + en-tête x-csrf-token
  * @returns 200 { user, accessToken, expiresIn, csrfToken }
  */
-authRouter.post("/refresh", authLimiter, verifyCsrf, asyncHandler(controller.refresh));
+authRouter.post("/refresh", refreshLimiter, verifyCsrf, asyncHandler(controller.refresh));
 
 /**
  * @route POST /auth/deconnexion

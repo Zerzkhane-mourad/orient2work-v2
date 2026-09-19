@@ -182,6 +182,12 @@ describe("Rotation du refresh token", () => {
       .set("x-csrf-token", csrfToken)
       .expect(200);
 
+    // Rotation vieillie au-delà du délai de grâce.
+    await prisma.refreshToken.updateMany({
+      where: { revokedAt: { not: null } },
+      data: { revokedAt: new Date(Date.now() - 60_000) },
+    });
+
     // Rejeu du token déjà consommé : traité comme un vol de cookie.
     await request(app)
       .post(`${API}/auth/refresh`)
@@ -191,6 +197,44 @@ describe("Rotation du refresh token", () => {
 
     const actifs = await prisma.refreshToken.count({ where: { revokedAt: null } });
     expect(actifs).toBe(0);
+  });
+
+  it("tolère le rejeu immédiat d'une rotation dont la réponse s'est perdue", async () => {
+    const { cookies, csrfToken } = await loginAndGetCookies();
+
+    // Premier refresh : le navigateur a quitté la page, le nouveau cookie est perdu.
+    await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", cookies)
+      .set("x-csrf-token", csrfToken)
+      .expect(200);
+
+    // La page suivante renvoie l'ancien cookie quelques instants plus tard.
+    await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", cookies)
+      .set("x-csrf-token", csrfToken)
+      .expect(200);
+
+    // Aucune révocation globale : les deux sessions issues des rotations vivent.
+    const actifs = await prisma.refreshToken.count({ where: { revokedAt: null } });
+    expect(actifs).toBe(2);
+  });
+
+  it("n'accorde pas de délai de grâce à un token révoqué par déconnexion", async () => {
+    const { cookies, csrfToken } = await loginAndGetCookies();
+
+    await request(app)
+      .post(`${API}/auth/deconnexion`)
+      .set("Cookie", cookies)
+      .set("x-csrf-token", csrfToken)
+      .expect(204);
+
+    await request(app)
+      .post(`${API}/auth/refresh`)
+      .set("Cookie", cookies)
+      .set("x-csrf-token", csrfToken)
+      .expect(401);
   });
 
   it("refuse le refresh sans en-tête CSRF", async () => {

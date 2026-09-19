@@ -56,9 +56,11 @@ export function isBootstrapped(): boolean {
 
 /**
  * Le backend renvoie le jeton CSRF dans le corps ET dans un cookie lisible.
- * On privilégie la valeur en mémoire : en production, si l'API est sur un
- * sous-domaine distinct, le cookie n'est pas lisible depuis le frontend
- * (voir README — `COOKIE_DOMAIN` doit alors couvrir les deux).
+ * On privilégie le COOKIE : il est partagé par tous les onglets et suit chaque
+ * rotation. La copie en mémoire devient obsolète dès qu'un autre onglet (ou une
+ * page restaurée par le bouton « précédent ») renouvelle la session, et le
+ * refresh échouait alors en 403. Elle ne sert que si le cookie est illisible
+ * (API sur une autre origine que le frontend).
  */
 function readCsrfCookie(): string | null {
   if (typeof document === "undefined") return null;
@@ -67,7 +69,7 @@ function readCsrfCookie(): string | null {
 }
 
 export function getCsrfToken(): string | null {
-  return csrfToken ?? readCsrfCookie();
+  return readCsrfCookie() ?? csrfToken;
 }
 
 export function setSession(session: AuthSession): void {

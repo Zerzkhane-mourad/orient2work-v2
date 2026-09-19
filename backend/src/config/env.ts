@@ -43,6 +43,13 @@ const envSchema = z
     JWT_REFRESH_SECRET: z.string().min(32, "32 caractères minimum"),
     JWT_ACCESS_TTL: durationSchema.default("15m"),
     JWT_REFRESH_TTL: durationSchema.default("7d"),
+    /**
+     * Délai pendant lequel un refresh token qui vient d'être tourné reste
+     * accepté. Couvre les rotations dont la réponse n'a jamais atteint le
+     * navigateur (page quittée pendant le refresh, onglets concurrents) : sans
+     * lui, ce cas légitime est pris pour un vol et révoque toutes les sessions.
+     */
+    REFRESH_REUSE_GRACE_SECONDS: z.coerce.number().int().min(0).max(60).default(10),
     JWT_ISSUER: z.string().min(1).default("orient2work-api"),
     JWT_AUDIENCE: z.string().min(1).default("orient2work-web"),
 
