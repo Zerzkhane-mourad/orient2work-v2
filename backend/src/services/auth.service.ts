@@ -73,6 +73,12 @@ async function issueSession(user: UserWithProfiles, context: SessionContext): Pr
 }
 
 async function issueVerificationToken(userId: string, email: string): Promise<void> {
+  if (env.AUTO_VERIFY_EMAIL) {
+    await userRepository.markEmailVerified(userId);
+    logger.warn({ email }, "AUTO_VERIFY_EMAIL actif : email validé sans confirmation");
+    return;
+  }
+
   await userRepository.invalidateActionTokens(userId, TokenPurpose.EMAIL_VERIFICATION);
   const token = generateOpaqueToken();
   await userRepository.createActionToken({

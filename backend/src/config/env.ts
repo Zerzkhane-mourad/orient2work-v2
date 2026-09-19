@@ -85,6 +85,11 @@ const envSchema = z
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
     MAIL_FROM: z.string().min(1).default("Orient2Work <no-reply@orient2work.ma>"),
+    /**
+     * Version de TEST uniquement : les comptes sont validés dès l'inscription,
+     * sans email de confirmation (utile quand l'hébergeur bloque le SMTP).
+     */
+    AUTO_VERIFY_EMAIL: booleanFromString.default("false"),
     EMAIL_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(30),
     PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(15),
 
