@@ -4,8 +4,9 @@
  * Proposition d'entretien à un candidat (§10).
  *
  * Le flux est celui du backend : l'ENTREPRISE propose une date et une heure, le
- * JEUNE accepte ou refuse. Le lien de visio n'est diffusé au candidat qu'une
- * fois l'entretien accepté.
+ * JEUNE accepte ou refuse. Le lien de visio est OBLIGATOIRE — l'entreprise qui
+ * propose organise — mais n'est diffusé au candidat qu'une fois l'entretien
+ * accepté.
  */
 import { useState } from "react";
 import { Button, ErrorBanner, Input, Modal, SuccessBanner, Textarea } from "@/components/ui";
@@ -63,7 +64,7 @@ export function ProposeEntretienModal({
       heure,
       ...(offreId ? { offreId } : {}),
       ...(candidatureId ? { candidatureId } : {}),
-      ...(lien.trim() ? { lienReunion: lien.trim() } : {}),
+      lienReunion: lien.trim(),
       ...(commentaire.trim() ? { commentaire: commentaire.trim() } : {}),
     });
     if (created) setSent(true);
@@ -89,7 +90,7 @@ export function ProposeEntretienModal({
               variant="secondary"
               type="submit"
               form="entretien-form"
-              disabled={pending || titre.trim().length === 0}
+              disabled={pending || titre.trim().length === 0 || lien.trim().length === 0}
             >
               {pending ? "Envoi…" : "Envoyer la proposition"}
             </Button>
@@ -142,7 +143,10 @@ export function ProposeEntretienModal({
               value={lien}
               onChange={(e) => setLien(e.target.value)}
               error={error?.issueFor("lienReunion")}
-              hint="Transmis au candidat uniquement s'il accepte l'entretien."
+              // Obligatoire, comme côté serveur : un entretien accepté sans
+              // lien n'est joignable nulle part.
+              required
+              hint="Google Meet, Teams, Zoom… Transmis au candidat uniquement s'il accepte."
             />
           </div>
           <div className="sm:col-span-2">

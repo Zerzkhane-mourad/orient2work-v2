@@ -333,6 +333,7 @@ describe("Progression de la candidature", () => {
         offreTitre: "Développeur frontend",
         date: isoInDays(7),
         heure: "17:00",
+        lienReunion: "https://meet.google.com/abc-defg-hij",
       })
       .expect(201);
 
@@ -343,6 +344,52 @@ describe("Progression de la candidature", () => {
     expect(apres?.status).toBe("entretien");
     // Planifier suppose d'avoir consulté le dossier.
     expect(apres?.vueLe).not.toBeNull();
+  });
+
+  it("expose le statut de l'entretien, qui suit la réponse du candidat", async () => {
+    const entreprise = await createEntreprise(app);
+    const jeune = await createJeune(app);
+    const offreId = await createOffre(entreprise.entrepriseId);
+
+    const candidature = await request(app)
+      .post(`${API}/candidatures`)
+      .set(...auth(jeune.accessToken))
+      .send({ offreId })
+      .expect(201);
+
+    const entretien = await request(app)
+      .post(`${API}/entretiens`)
+      .set(...auth(entreprise.accessToken))
+      .send({
+        jeuneId: jeune.jeuneId,
+        candidatureId: candidature.body.data.id,
+        offreId,
+        offreTitre: "Développeur frontend",
+        date: isoInDays(7),
+        heure: "17:00",
+        lienReunion: "https://meet.google.com/abc-defg-hij",
+      })
+      .expect(201);
+
+    const lire = async () =>
+      (
+        await request(app)
+          .get(`${API}/candidatures/mes-candidatures`)
+          .set(...auth(jeune.accessToken))
+          .expect(200)
+      ).body.data[0];
+
+    // Invitation reçue : une réponse est attendue.
+    expect(await lire()).toMatchObject({ status: "entretien", entretienStatus: "en_attente" });
+
+    await request(app)
+      .post(`${API}/entretiens/${entretien.body.data.id}/reponse`)
+      .set(...auth(jeune.accessToken))
+      .send({ status: "accepte" })
+      .expect(200);
+
+    // Le statut de candidature, lui, ne bouge PAS — d'où ce champ.
+    expect(await lire()).toMatchObject({ status: "entretien", entretienStatus: "accepte" });
   });
 
   it("ne fait jamais reculer une candidature déjà acceptée", async () => {
@@ -371,6 +418,7 @@ describe("Progression de la candidature", () => {
         offreTitre: "Second entretien",
         date: isoInDays(9),
         heure: "10:00",
+        lienReunion: "https://meet.google.com/abc-defg-hij",
       })
       .expect(201);
 
@@ -401,6 +449,7 @@ describe("Progression de la candidature", () => {
         offreTitre: "Échange informel",
         date: isoInDays(5),
         heure: "11:00",
+        lienReunion: "https://meet.google.com/abc-defg-hij",
       })
       .expect(201);
 

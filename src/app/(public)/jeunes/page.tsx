@@ -42,6 +42,10 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Pour les jeunes",
   description: "Créez votre profil, validez votre test, formez-vous et accédez aux opportunités.",
+  openGraph: {
+    title: "Pour les jeunes | Orient2Work by OMB",
+    description: "Créez votre profil, validez votre test, formez-vous et accédez aux opportunités.",
+  },
 };
 
 /**

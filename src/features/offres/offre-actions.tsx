@@ -28,12 +28,39 @@ import { useProfile } from "@/features/jeune/profil/profile-store";
 import { api } from "@/lib/api";
 import type { ApiCandidature } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
+import { cn, formatDate } from "@/lib/utils";
+import { joursRestants } from "./presentation";
 
 interface OffreActionsProps {
   offreId: string;
+  /** `YYYY-MM-DD` — rappelée sous le bouton : l'échéance est ce qui fait agir. */
+  dateLimite?: string;
   /** Candidature déjà déposée sur cette offre, si elle existe. */
   existante: ApiCandidature | null;
   onApplied: () => void;
+}
+
+/** En deçà, l'échéance passe en alerte. */
+const URGENCE_JOURS = 7;
+
+function Echeance({ dateLimite }: { dateLimite: string }) {
+  const restants = joursRestants(dateLimite);
+  const urgent = restants <= URGENCE_JOURS;
+  return (
+    <p
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+        urgent
+          ? "bg-secondary-container font-semibold text-on-secondary-container"
+          : "bg-white/10 text-white/90",
+      )}
+    >
+      <Icon name={urgent ? "timer" : "event"} className="shrink-0 text-[18px]" />
+      {restants <= 0
+        ? "Dernier jour pour postuler"
+        : `Encore ${restants} jour${restants > 1 ? "s" : ""} · jusqu'au ${formatDate(dateLimite)}`}
+    </p>
+  );
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -46,7 +73,7 @@ const STATUS_LABELS: Record<string, string> = {
   retiree: "Candidature retirée",
 };
 
-export function OffreActions({ offreId, existante, onApplied }: OffreActionsProps) {
+export function OffreActions({ offreId, dateLimite, existante, onApplied }: OffreActionsProps) {
   const { jeune } = useProfile();
   const { user } = useSession();
   const [open, setOpen] = useState(false);
@@ -121,9 +148,38 @@ export function OffreActions({ offreId, existante, onApplied }: OffreActionsProp
 
   return (
     <>
-      <Card>
-        <CardBody className="space-y-4">
-          <h3 className="font-bold text-primary">Intéressé par cette offre ?</h3>
+      {/* Bleu nuit et or : le seul appel fort de la colonne, comme l'encart
+          « Aucune offre ne correspond ? » de la liste. `primary-container`
+          reste profond dans tous les thèmes. */}
+      {/* Liseré or et halo : la carte se détache de TOUT le reste de l'écran,
+          y compris des autres cartes sombres — c'est l'action de la page. */}
+      <Card className="relative overflow-hidden border-0 bg-primary-container text-white shadow-level-2 ring-2 ring-secondary-container/70">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-secondary-container/30 blur-3xl"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-secondary-container via-secondary-fixed-dim to-secondary-container"
+        />
+        <CardBody className="relative space-y-4 p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-secondary-container text-on-secondary-container shadow-level-1">
+              <Icon name="rocket_launch" className="text-[22px]" />
+            </span>
+            <div className="space-y-1">
+              <h3 className="font-headline text-lg font-bold leading-snug">
+                Intéressé par cette offre ?
+              </h3>
+              <p className="text-sm text-white/75">
+                Postulez en un clic : votre CV est joint automatiquement.
+              </p>
+            </div>
+          </div>
+
+          {/* L'échéance, en clair : « encore 3 jours » fait agir aujourd'hui,
+              une date seule se remet à plus tard. */}
+          {dateLimite && <Echeance dateLimite={dateLimite} />}
 
           {!emailOk && (
             <p className="flex items-start gap-2 rounded-lg bg-secondary-container px-3 py-2 text-xs text-on-secondary-container">
@@ -168,15 +224,22 @@ export function OffreActions({ offreId, existante, onApplied }: OffreActionsProp
           ) : (
             <Button
               variant="secondary"
+              size="lg"
               fullWidth
               disabled={!peutCandidater}
               onClick={() => setOpen(true)}
+              className="group"
             >
-              <Icon name="send" className="text-[18px]" /> Candidater
+              <Icon name="send" className="text-[18px]" /> Postuler
+              <Icon
+                name="arrow_forward"
+                className="text-[18px] transition-transform duration-200 group-hover:translate-x-1"
+              />
             </Button>
           )}
 
-          <p className="text-center text-xs text-on-surface-variant">
+          <p className="flex items-center justify-center gap-1.5 text-center text-xs text-white/70">
+            <Icon name="verified_user" className="text-[14px] text-secondary-fixed-dim" />
             Votre profil complet sera transmis à l&apos;entreprise.
           </p>
         </CardBody>

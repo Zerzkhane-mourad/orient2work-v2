@@ -51,6 +51,7 @@ import { compterParJour, semaineCourante } from "@/lib/semaine";
 /** Constantes de module : un tableau recréé à chaque rendu boucle la requête. */
 const NOUVELLES = ["envoyee"] as const;
 const CONFIRMES = ["accepte"] as const;
+const EN_ATTENTE = ["en_attente"] as const;
 
 const APERCU = 4;
 
@@ -99,6 +100,18 @@ export default function EspaceEntrepriseDashboard() {
     [],
   );
   const compteursEntretiens = useApi(() => api.entretiens.countByStatus(), []);
+  /*
+   * Les candidatures spontanées, à part.
+   *
+   * `countByStatus` ne sait pas distinguer l'origine d'une demande : les
+   * candidatures spontanées — qui attendent l'ENTREPRISE — se fondaient dans
+   * « entretiens en attente de réponse », ligne qui dit d'attendre. La file de
+   * travail du recruteur était donc cachée dans une file de patience.
+   */
+  const spontaneesAtraiter = useApi(
+    () => api.entretiens.list({ status: EN_ATTENTE, spontanee: true, perPage: 1 }),
+    [],
+  );
   const prochainsEntretiens = useApi(
     () =>
       api.entretiens.list({
@@ -118,6 +131,17 @@ export default function EspaceEntrepriseDashboard() {
 
   const compteurs = compteursEntretiens.data ?? {};
   const entretiensAConfirmer = compteurs.en_attente ?? 0;
+  /*
+   * La répartition n'a de sens qu'une fois les DEUX requêtes revenues : le
+   * compte global arrivant en premier, tout serait un instant porté au crédit
+   * de « en attente du candidat », avant de se réécrire sous les yeux.
+   */
+  const repartitionPrete = !compteursEntretiens.loading && !spontaneesAtraiter.loading;
+  const aTraiterSpontanees = repartitionPrete ? (spontaneesAtraiter.data?.meta.total ?? 0) : 0;
+  // Le reste attend le candidat : rien à faire de ce côté, et la ligne le dit.
+  const attenteCandidat = repartitionPrete
+    ? Math.max(0, entretiensAConfirmer - aTraiterSpontanees)
+    : 0;
   const entretiensAcceptes = compteurs.accepte ?? 0;
   const entretiensTotal = entretiensAConfirmer + entretiensAcceptes + (compteurs.refuse ?? 0);
 
@@ -145,7 +169,12 @@ export default function EspaceEntrepriseDashboard() {
     (recues.at(-1)?.createdAt ?? "").slice(0, 10) >= jours[0]!.iso;
 
   const chargementKpi =
-    offresTotal.loading || candidaturesTotal.loading || compteursEntretiens.loading;
+    offresTotal.loading ||
+    candidaturesTotal.loading ||
+    compteursEntretiens.loading ||
+    // Sans elle, la file s'affiche un instant entièrement du côté « attente du
+    // candidat », puis se réécrit : le recruteur voit passer un faux zéro.
+    spontaneesAtraiter.loading;
 
   /*
    * Une seule file d'attente pour les trois décisions possibles.
@@ -163,9 +192,15 @@ export default function EspaceEntrepriseDashboard() {
       href: "/espace-entreprise/candidatures",
     },
     {
+      icone: "handshake",
+      libelle: "Candidatures spontanées à traiter",
+      count: aTraiterSpontanees,
+      href: "/espace-entreprise/entretiens",
+    },
+    {
       icone: "event",
-      libelle: "Entretiens en attente de réponse",
-      count: entretiensAConfirmer,
+      libelle: "Entretiens en attente du candidat",
+      count: attenteCandidat,
       href: "/espace-entreprise/entretiens",
     },
     {
@@ -428,7 +463,10 @@ export default function EspaceEntrepriseDashboard() {
             <CardBody className="space-y-1 pt-4">
               {files.map((f) => (
                 <Link
-                  key={f.href}
+                  // Le libellé, et non la cible : deux files distinctes mènent
+                  // au même écran (spontanées à traiter / entretiens en attente),
+                  // et `href` ne les distinguait donc pas.
+                  key={f.libelle}
                   href={f.href}
                   className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-container-low"
                 >

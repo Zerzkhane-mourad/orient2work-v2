@@ -6,11 +6,15 @@ import type {
   ApiFormation,
   ApiJeune,
   ApiOffre,
+  ApiPermissionGroup,
+  ApiRoleAdmin,
   ApiTest,
+  ApiUtilisateurAdmin,
   EntrepriseStatus,
   JeuneStatus,
   OffreStatus,
   Paginated,
+  Permission,
   QuestionType,
 } from "../types";
 
@@ -235,4 +239,63 @@ export const adminApi = {
     http.patch<ApiFormation>(`/formations/${id}`, input),
 
   deleteFormation: (id: string) => http.delete<void>(`/formations/${id}`),
+
+  /*
+   * Rôles et permissions du back-office.
+   *
+   * Le catalogue de permissions vient du SERVEUR : c'est lui qui pose les
+   * gardes, donc lui qui sait ce qui existe. L'écran dessine sa matrice à
+   * partir de `permissions()` plutôt que d'une liste recopiée ici, qui
+   * mentirait au premier droit ajouté.
+   */
+  permissions: () => http.get<ApiPermissionGroup[]>("/admin/permissions"),
+
+  roles: (params: { q?: string; page?: number; perPage?: number } = {}) =>
+    http.list<ApiRoleAdmin>("/admin/roles", { ...params }) as Promise<Paginated<ApiRoleAdmin>>,
+
+  role: (id: string) => http.get<ApiRoleAdmin>(`/admin/roles/${id}`),
+
+  createRole: (input: { nom: string; description?: string; permissions?: Permission[] }) =>
+    http.post<ApiRoleAdmin>("/admin/roles", input),
+
+  /** Le tableau `permissions` REMPLACE l'ancien : l'écran envoie l'état des cases. */
+  updateRole: (
+    id: string,
+    input: Partial<{ nom: string; description: string; permissions: Permission[] }>,
+  ) => http.patch<ApiRoleAdmin>(`/admin/roles/${id}`, input),
+
+  deleteRole: (id: string) => http.delete<void>(`/admin/roles/${id}`),
+
+  // ── Comptes d'administration ───────────────────────────────────────────────
+  utilisateurs: (
+    params: {
+      q?: string;
+      roleAdminId?: string;
+      /** Omis = actifs et désactivés confondus. */
+      actif?: boolean;
+      page?: number;
+      perPage?: number;
+    } = {},
+  ) =>
+    http.list<ApiUtilisateurAdmin>("/admin/utilisateurs", { ...params }) as Promise<
+      Paginated<ApiUtilisateurAdmin>
+    >,
+
+  createUtilisateur: (input: {
+    nom: string;
+    email: string;
+    password: string;
+    roleAdminId: string;
+  }) => http.post<ApiUtilisateurAdmin>("/admin/utilisateurs", input),
+
+  updateUtilisateur: (
+    id: string,
+    input: Partial<{ nom: string; roleAdminId: string; actif: boolean }>,
+  ) => http.patch<ApiUtilisateurAdmin>(`/admin/utilisateurs/${id}`, input),
+
+  /** Réinitialisation par un administrateur : révoque toutes les sessions du compte. */
+  resetUtilisateurPassword: (id: string, password: string) =>
+    http.post<ApiUtilisateurAdmin>(`/admin/utilisateurs/${id}/mot-de-passe`, { password }),
+
+  deleteUtilisateur: (id: string) => http.delete<void>(`/admin/utilisateurs/${id}`),
 };

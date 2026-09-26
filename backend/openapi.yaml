@@ -66,6 +66,18 @@ tags:
     description: Formulaire de contact public et newsletter
   - name: Admin
     description: Modération et statistiques (rôle ADMIN)
+  - name: Accès
+    description: |
+      Rôles, permissions et comptes du back-office.
+
+      Le rôle `ADMIN` ouvre le back-office ; la PERMISSION dit ce qu'on y fait.
+      Chaque route d'administration en exige une (indiquée dans sa description) :
+      le rôle d'un administrateur qui ne la détient pas reçoit un 403 nommant le
+      code manquant.
+
+      Les permissions sont relues en base à chaque requête, et non portées par
+      l'access token : un droit retiré s'applique immédiatement, sans attendre
+      l'expiration du jeton.
 
 security:
   - bearerAuth: []
@@ -186,15 +198,22 @@ paths:
     post:
       tags: [Auth]
       summary: Inscription d'une entreprise
-      description: Le compte est créé au statut `attente_contact` et doit être validé par OMB.
+      description: >-
+        Le compte est créé au statut `attente_contact` et doit être validé par OMB.
+        Le logo est obligatoire : il devient l'image du compte et, via les couleurs
+        relevées côté navigateur, la palette de l'espace entreprise.
       security: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema: { $ref: "#/components/schemas/RegisterEntreprise" }
+            encoding:
+              logo: { contentType: "image/jpeg, image/png, image/webp" }
       responses:
         "201": { $ref: "#/components/responses/Message" }
+        "413": { $ref: "#/components/responses/ValidationError" }
+        "415": { $ref: "#/components/responses/ValidationError" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /auth/connexion:
@@ -746,6 +765,10 @@ paths:
     get:
       tags: [Formations]
       summary: Catalogue des formations
+      description: |
+        Route publique. Un ADMIN détenant `formations:read` y voit EN PLUS les
+        formations non publiées ; sans la permission il obtient le catalogue
+        public — la route ne peut pas refuser ce qu'elle sert à tout visiteur.
       security: []
       parameters:
         - { name: q, in: query, schema: { type: string } }
@@ -833,7 +856,10 @@ paths:
                     formation: { type: string }
                     reference: { type: string, example: O2W-CERT-2026-00042 }
                     delivreLe: { type: string, format: date-time }
-                    url: { type: string, example: /api/v1/formations/{id}/certificat }
+                    # Guillemets obligatoires : une accolade ouvrante non citée dans un
+                    # mapping en flux ouvre un mapping imbriqué, et toute la suite du
+                    # fichier devenait illisible — le document entier ne se parsait plus.
+                    url: { type: string, example: "/api/v1/formations/{id}/certificat" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /formations/{id}/certificat:
@@ -1053,7 +1079,12 @@ paths:
     get:
       tags: [Entretiens]
       summary: Entretiens de l'utilisateur connecté
-      description: Le périmètre est déduit du rôle, jamais d'un paramètre client.
+      description: |
+        Le périmètre est déduit du rôle, jamais d'un paramètre client.
+
+        Un ADMIN a pour périmètre la plateforme entière : cette branche-là exige
+        en plus la permission `entretiens:read`, sans quoi elle renvoie 403. Un
+        jeune ou une entreprise n'est pas concerné, son périmètre étant le sien.
       parameters:
         - name: status
           in: query
@@ -1077,14 +1108,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [jeuneId, offreTitre, date, heure]
+              required: [jeuneId, offreTitre, date, heure, lienReunion]
               properties:
                 jeuneId: { type: string, format: uuid }
                 offreId: { type: string, format: uuid }
                 offreTitre: { type: string }
                 date: { type: string, example: "2026-09-15" }
                 heure: { type: string, example: "14:00" }
-                lienReunion: { type: string, format: uri }
+                lienReunion:
+                  type: string
+                  format: uri
+                  description: >-
+                    Obligatoire. Transmis au candidat seulement après son acceptation.
+                  example: "https://meet.google.com/abc-defg-hij"
                 commentaire: { type: string }
       responses:
         "201": { description: Entretien proposé }
@@ -1731,6 +1767,237 @@ paths:
         "204": { description: Entrée supprimée }
         "409": { description: Entrée utilisée }
 
+  /admin/permissions:
+    get:
+      tags: [Accès]
+      summary: Catalogue des permissions, groupé par domaine
+      description: |
+        Requiert `roles:read`.
+
+        Source de la matrice de cases à cocher du back-office. Le catalogue est
+        une constante du SERVEUR — une permission n'existe que si une route
+        l'exige —, l'écran le charge donc plutôt que d'en tenir une copie.
+      responses:
+        "200":
+          description: Groupes de permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PermissionGroup" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/roles:
+    get:
+      tags: [Accès]
+      summary: Lister les rôles d'administration
+      description: Requiert `roles:read`.
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Rôles paginés
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RoleAdmin" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Accès]
+      summary: Créer un rôle
+      description: |
+        Requiert `roles:write`.
+
+        Les codes de permission sont validés contre le catalogue : un code
+        inconnu part en 422 sur le champ `permissions` plutôt que d'être stocké
+        sans rien protéger.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleAdminInput" }
+      responses:
+        "201": { description: Rôle créé }
+        "409": { description: Un rôle porte déjà ce nom }
+
+  /admin/roles/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Accès]
+      summary: Détail d'un rôle
+      description: Requiert `roles:read`.
+      responses:
+        "200": { description: Rôle }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Accès]
+      summary: Modifier un rôle
+      description: |
+        Requiert `roles:write`.
+
+        Le tableau `permissions` REMPLACE l'ancien : l'écran envoie l'état des
+        cases, pas un delta. Modifier les permissions du rôle système est refusé
+        en 403 — ses droits sont calculés et couvrent tout le catalogue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleAdminInput" }
+      responses:
+        "200": { description: Rôle mis à jour }
+        "403": { description: Permissions du rôle système }
+        "409": { description: Un rôle porte déjà ce nom }
+    delete:
+      tags: [Accès]
+      summary: Supprimer un rôle inutilisé
+      description: |
+        Requiert `roles:write`. Refusé en 409 si des comptes le portent encore —
+        les réaffecter est une décision, pas un effet de bord —, et en 403 pour
+        le rôle système.
+      responses:
+        "204": { description: Rôle supprimé }
+        "403": { description: Rôle système }
+        "409": { description: Rôle encore attribué }
+
+  /admin/utilisateurs:
+    get:
+      tags: [Accès]
+      summary: Annuaire des comptes d'administration
+      description: Requiert `utilisateurs:read`. Ne contient que des comptes `ADMIN`.
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: roleAdminId, schema: { type: string, format: uuid } }
+        - in: query
+          name: actif
+          description: Omis = actifs et désactivés confondus.
+          schema: { type: string, enum: ["true", "false"] }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Comptes paginés
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UtilisateurAdmin" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Accès]
+      summary: Créer un compte d'administration
+      description: |
+        Requiert `utilisateurs:write`.
+
+        Réservé aux comptes `ADMIN` : jeunes et entreprises passent par
+        l'inscription publique, qui crée aussi leur profil métier et les engage
+        dans un parcours de validation qu'un back-office ne doit pas contourner.
+
+        Le compte est actif et son adresse est considérée comme vérifiée — elle
+        a été saisie par un administrateur qui répond de son usage. Le rôle est
+        obligatoire : sans lui, le compte n'aurait accès à aucun écran.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, email, password, roleAdminId]
+              properties:
+                nom: { type: string, minLength: 2, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { $ref: "#/components/schemas/Password" }
+                roleAdminId: { type: string, format: uuid }
+      responses:
+        "201": { description: Compte créé }
+        "404": { description: Rôle inexistant }
+        "409": { description: Adresse email déjà utilisée }
+
+  /admin/utilisateurs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Accès]
+      summary: Détail d'un compte d'administration
+      description: Requiert `utilisateurs:read`.
+      responses:
+        "200": { description: Compte }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Accès]
+      summary: Nom, rôle ou activation d'un compte
+      description: |
+        Requiert `utilisateurs:write`.
+
+        Désactiver révoque immédiatement les refresh tokens du compte : sans
+        cela la session en cours se prolongerait jusqu'à l'expiration de
+        l'access token.
+
+        Refusé en 403 sur son PROPRE compte — se retirer son rôle est l'erreur
+        qu'on ne peut pas réparer soi-même —, et en 409 s'il s'agit du dernier
+        super administrateur actif.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                nom: { type: string, minLength: 2, maxLength: 120 }
+                roleAdminId: { type: string, format: uuid }
+                actif: { type: boolean }
+      responses:
+        "200": { description: Compte mis à jour }
+        "403": { description: Action sur son propre compte }
+        "409": { description: Dernier super administrateur actif }
+    delete:
+      tags: [Accès]
+      summary: Supprimer définitivement un compte
+      description: |
+        Requiert `utilisateurs:write`. Mêmes refus que `PATCH`.
+
+        La désactivation reste la voie normale : elle conserve la date de
+        dernière connexion, donc la trace de ce que le compte a pu faire. La
+        suppression est là pour les créations erronées.
+      responses:
+        "204": { description: Compte supprimé }
+        "403": { description: Action sur son propre compte }
+        "409": { description: Dernier super administrateur actif }
+
+  /admin/utilisateurs/{id}/mot-de-passe:
+    post:
+      tags: [Accès]
+      summary: Réinitialiser le mot de passe d'un compte
+      description: |
+        Requiert `utilisateurs:write`.
+
+        Distincte de `POST /auth/mot-de-passe`, qui exige l'ancien mot de passe :
+        l'autorisation vient ici de la permission, pas de la connaissance du
+        secret. Toutes les sessions du compte sont révoquées — si l'opération
+        fait suite à une suspicion de compromission, laisser vivre les sessions
+        ouvertes en annulerait l'intérêt.
+
+        POST et non PATCH : le corps décrit une OPÉRATION, pas l'état visé d'une
+        ressource — le mot de passe n'est jamais relu.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { $ref: "#/components/schemas/Password" }
+      responses:
+        "200": { description: Mot de passe remplacé, sessions révoquées }
+        "403": { description: Action sur son propre compte }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2001,9 +2268,106 @@ components:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         role: { $ref: "#/components/schemas/Role" }
+        nom:
+          type: string
+          description: |
+            Nom d'affichage, présent pour les comptes d'administration. Un jeune
+            ou une entreprise porte le sien dans son profil métier.
         emailVerified: { type: boolean }
         createdAt: { type: string, format: date-time }
         profileId: { type: string, format: uuid, nullable: true }
+        permissions:
+          type: array
+          description: |
+            Permissions d'administration ; vide pour un jeune ou une entreprise.
+
+            Permet au back-office de masquer les écrans inaccessibles. C'est un
+            confort d'affichage : l'autorisation est refaite par le serveur sur
+            chaque requête, à partir de la base et non de ce tableau.
+          items: { type: string }
+
+    Password:
+      type: string
+      format: password
+      minLength: 12
+      maxLength: 128
+      description: 12 caractères minimum, avec au moins une majuscule, une minuscule et un chiffre.
+
+    PermissionGroup:
+      type: object
+      description: |
+        Un domaine du catalogue de permissions. L'ordre renvoyé est celui dans
+        lequel le back-office affiche sa matrice.
+      properties:
+        cle: { type: string, example: administration }
+        libelle: { type: string, example: Administration }
+        description: { type: string }
+        permissions:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                description: "Format `<ressource>:<action>`, avec `read` ou `write`."
+                example: roles:write
+              libelle: { type: string }
+
+    RoleAdmin:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nom: { type: string }
+        description: { type: string }
+        permissions:
+          type: array
+          description: |
+            Permissions EFFECTIVES : un rôle système renvoie tout le catalogue,
+            bien que sa colonne en base soit vide.
+          items: { type: string }
+        systeme:
+          type: boolean
+          description: |
+            Rôle fondateur. Ses permissions suivent automatiquement le catalogue
+            et ne se modifient pas ; il ne se supprime pas. Il garantit qu'aucune
+            manipulation du back-office ne laisse la plateforme sans personne
+            capable de rouvrir les droits.
+        utilisateurs:
+          type: integer
+          description: Comptes rattachés ; la suppression est refusée dès qu'il est non nul.
+        createdAt: { type: string, format: date-time }
+
+    RoleAdminInput:
+      type: object
+      properties:
+        nom: { type: string, minLength: 2, maxLength: 60 }
+        description: { type: string, maxLength: 300 }
+        permissions:
+          type: array
+          description: Codes du catalogue ; remplace l'ensemble précédent.
+          items: { type: string }
+
+    UtilisateurAdmin:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nom: { type: string }
+        role:
+          type: object
+          nullable: true
+          description: "`null` pour un compte sans rôle : il n'a alors accès à aucun écran."
+          properties:
+            id: { type: string, format: uuid }
+            nom: { type: string }
+            systeme: { type: boolean }
+        actif: { type: boolean }
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "`null` tant que le compte ne s'est jamais connecté."
+        createdAt: { type: string, format: date-time }
 
     AuthResponse:
       type: object
@@ -2047,7 +2411,11 @@ components:
 
     RegisterEntreprise:
       type: object
-      required: [email, password, nom, secteur, ville, responsable, telephone]
+      description: >-
+        Envoyé en `multipart/form-data` : le logo est obligatoire et voyage avec
+        le formulaire, l'inscription n'ouvrant pas de session qui permettrait de
+        le déposer ensuite sur `POST /documents/LOGO`.
+      required: [email, password, nom, secteur, ville, responsable, telephone, logo]
       properties:
         email: { type: string, format: email }
         password: { type: string, format: password, minLength: 12 }
@@ -2059,6 +2427,22 @@ components:
         responsable: { type: string }
         emailResponsable: { type: string, format: email }
         telephone: { type: string }
+        logo:
+          type: string
+          format: binary
+          description: JPG, PNG ou WebP. Devient le logo du compte et la source de son thème.
+        themeCouleur:
+          type: string
+          pattern: "^#[0-9a-f]{6}$"
+          description: >-
+            Couleur dominante relevée dans le logo par le navigateur. Bascule le
+            compte sur le thème `auto`. Omise pour un logo achromatique.
+          example: "#c81e3a"
+        themeAccent:
+          type: string
+          pattern: "^#[0-9a-f]{6}$"
+          description: Seconde couleur du logo. Omise, la famille secondaire suit la teinte principale.
+          example: "#f0a500"
 
     Experience:
       type: object
@@ -2110,7 +2494,37 @@ components:
           { type: integer, readOnly: true, description: "Score d'employabilité dérivé (0–100)" }
         formationsValidees: { type: array, items: { type: string, format: uuid } }
         formationsCompletees: { type: integer }
+        formations:
+          type: array
+          description: >-
+            Parcours de formation détaillé, validées d'abord. Double emploi assumé avec
+            `formationsValidees`, qui est un index par identifiant consommé par le calcul de
+            score ; celle-ci est une liste lisible, pour l'affichage.
+          items: { $ref: "#/components/schemas/FormationSuivie" }
         candidatures: { type: integer }
+
+    FormationSuivie:
+      type: object
+      description: Formation suivie sur la plateforme, telle qu'un recruteur la lit.
+      properties:
+        id: { type: string, format: uuid, description: "Identifiant de la FORMATION" }
+        titre: { type: string }
+        categorie: { type: string }
+        niveau: { type: string }
+        certifiante:
+          { type: boolean, description: "Délivre un certificat à qui réussit son quiz" }
+        tempsLectureMin: { type: integer }
+        progression: { type: integer, description: "Avancement de lecture, 0–100" }
+        lu: { type: boolean }
+        valide: { type: boolean, description: "Quiz réussi — fait la formation « validée »" }
+        meilleurScore: { type: integer, description: "Meilleur score au quiz, en %" }
+        valideAt: { type: string, format: date-time }
+        certificat:
+          type: string
+          description: >-
+            Référence du certificat (`O2W-CERT-2026-00042`), présente une fois le certificat
+            délivré. Le PDF reste derrière le jeton du candidat : seule la référence est publiée.
+          example: O2W-CERT-2026-00042
 
     UpdateJeune:
       type: object
@@ -2149,18 +2563,38 @@ components:
         telephone: { type: string, description: "Absent de la vue publique" }
         status: { $ref: "#/components/schemas/EntrepriseStatus" }
         theme: { $ref: "#/components/schemas/EntrepriseTheme" }
+        themeCouleur: { $ref: "#/components/schemas/CouleurLogo" }
+        themeAccent: { $ref: "#/components/schemas/CouleurLogo" }
         offresPubliees: { type: integer }
 
     EntrepriseTheme:
       type: string
-      description: "Palette de l'espace entreprise. Absent de la vue publique."
-      enum: [marine, emeraude, ocean, amethyste, bordeaux, ardoise]
+      description: >-
+        Palette de l'espace entreprise. Absent de la vue publique.
+        `auto` calcule la palette à partir de `themeCouleur` / `themeAccent` ;
+        les autres valeurs sont des préréglages livrés.
+      enum: [auto, marine, emeraude, ocean, amethyste, bordeaux, ardoise]
+
+    CouleurLogo:
+      type: string
+      nullable: true
+      pattern: "^#[0-9a-f]{6}$"
+      description: >-
+        Couleur relevée dans le logo, source du thème `auto`. Absente de la vue
+        publique, et absente des comptes créés avant que le logo ne devienne
+        obligatoire à l'inscription.
+      example: "#c81e3a"
 
     UpdateEntreprise:
       type: object
+      description: >-
+        Demander `theme: auto` exige une couleur — fournie dans le même appel ou
+        déjà enregistrée. À défaut, la requête est rejetée en 422.
       properties:
         nom: { type: string }
         theme: { $ref: "#/components/schemas/EntrepriseTheme" }
+        themeCouleur: { $ref: "#/components/schemas/CouleurLogo" }
+        themeAccent: { $ref: "#/components/schemas/CouleurLogo" }
         secteur: { type: string }
         ville: { type: string }
         siteWeb: { type: string, format: uri }
@@ -2223,7 +2657,36 @@ components:
         message: { type: string }
         createdAt: { type: string, format: date-time }
         vueLe: { type: string, format: date-time }
-        offre: { type: object }
+        entretienStatus:
+          type: string
+          enum: [en_attente, accepte, refuse, annule]
+          description: >-
+            Statut du dernier entretien proposé sur cette candidature. Le statut
+            `entretien` de la candidature ne change pas à la réponse du candidat :
+            seul ce champ dit si une réponse est encore attendue.
+        offre:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            titre: { type: string }
+            type: { type: string }
+            ville: { type: string }
+            mode: { type: string }
+            niveauDemande: { type: string }
+            filiere: { type: string }
+            competences: { type: array, items: { type: string } }
+            apercu:
+              type: string
+              description: Début de la description (280 caractères au plus).
+            nombrePostes: { type: integer }
+            dateLimite: { type: string, format: date }
+            entreprise:
+              type: object
+              properties:
+                id: { type: string, format: uuid }
+                nom: { type: string }
+                logo: { type: string }
+                ville: { type: string }
         cv:
           type: object
           properties:

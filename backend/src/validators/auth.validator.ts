@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   emailSchema,
+  hexColorSchema,
   longText,
   passwordSchema,
   phoneSchema,
@@ -40,6 +41,19 @@ export const registerJeuneSchema = z
   })
   .strict();
 
+/**
+ * Inscription d'une entreprise.
+ *
+ * Reçue en `multipart/form-data` et non en JSON : le LOGO est obligatoire, et
+ * l'inscription n'ouvre pas de session — il n'existe donc aucun moment, entre
+ * la création du compte et la première connexion, où le fichier pourrait être
+ * déposé sur la route authentifiée `POST /documents/LOGO`. Le transmettre avec
+ * le reste du formulaire est la seule façon d'en faire un champ réellement
+ * requis plutôt qu'une étape que le compte peut sauter.
+ *
+ * Conséquence : toutes les valeurs arrivent en chaînes de caractères. Ce schéma
+ * n'en attend aucune autre, il n'y a donc rien à coercer.
+ */
 export const registerEntrepriseSchema = z
   .object({
     email: emailSchema,
@@ -52,6 +66,17 @@ export const registerEntrepriseSchema = z
     responsable: shortText(120),
     emailResponsable: emailSchema.optional(),
     telephone: phoneSchema,
+    /**
+     * Couleurs relevées dans le logo par le navigateur, qui alimentent le thème
+     * « auto » de l'espace (cf. `features/entreprise/theme-from-color.ts`).
+     *
+     * Optionnelles à dessein : l'extraction se fait sur un canevas, et un logo
+     * strictement noir et blanc n'en produit aucune. Absentes, le compte
+     * démarre sur le préréglage par défaut — jamais sur un thème à moitié
+     * calculé.
+     */
+    themeCouleur: hexColorSchema.optional(),
+    themeAccent: hexColorSchema.optional(),
   })
   .strict();
 

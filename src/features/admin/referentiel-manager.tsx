@@ -41,6 +41,7 @@ import {
 import { TableEmpty, TableSkeleton } from "@/features/admin/admin-table";
 import { useApi, useMutation } from "@/lib/api/use-api";
 import { usePageSize, usePagination, useClampPage } from "@/lib/use-pagination";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiReferentielEntree, ReferentielKey } from "@/lib/api/types";
 
@@ -74,6 +75,10 @@ const PER_PAGE = 20;
 const COLUMNS = 5;
 
 export function ReferentielManager({ config }: { config: ReferentielConfig }) {
+  // Les listes de valeurs restent consultables avec `referentiels:read` ;
+  // créer, renommer, réordonner et supprimer disparaissent sans l'écriture.
+  const peutEcrire = useCan("referentiels:write");
+
   const { perPage, setPerPage } = usePageSize({
     defaultSize: PER_PAGE,
     storageKey: `referentiel-${config.cle}`,
@@ -153,16 +158,18 @@ export function ReferentielManager({ config }: { config: ReferentielConfig }) {
         title="Référentiels"
         subtitle="Listes de valeurs utilisées par la plateforme."
         actions={
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setNom("");
-              create.reset();
-              setCreating(true);
-            }}
-          >
-            <Icon name="add" className="text-[18px]" /> Nouvelle {config.singulier}
-          </Button>
+          peutEcrire && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setNom("");
+                create.reset();
+                setCreating(true);
+              }}
+            >
+              <Icon name="add" className="text-[18px]" /> Nouvelle {config.singulier}
+            </Button>
+          )
         }
       />
 
@@ -208,7 +215,7 @@ export function ReferentielManager({ config }: { config: ReferentielConfig }) {
                         <div className="flex items-center gap-0.5">
                           <button
                             type="button"
-                            disabled={pending || (page === 1 && index === 0)}
+                            disabled={pending || !peutEcrire || (page === 1 && index === 0)}
                             onClick={() => void move(entree.id, "haut")}
                             className="rounded p-1 text-on-surface-variant hover:bg-surface-container disabled:opacity-30"
                             aria-label="Monter"
@@ -220,6 +227,7 @@ export function ReferentielManager({ config }: { config: ReferentielConfig }) {
                             type="button"
                             disabled={
                               pending ||
+                              !peutEcrire ||
                               (data?.meta.page === data?.meta.totalPages &&
                                 index === entrees.length - 1)
                             }
@@ -254,6 +262,8 @@ export function ReferentielManager({ config }: { config: ReferentielConfig }) {
                       </TD>
                       <TD>
                         <div className="flex justify-end gap-1">
+                          {peutEcrire && (
+                          <>
                           <button
                             type="button"
                             disabled={pending}
@@ -300,6 +310,8 @@ export function ReferentielManager({ config }: { config: ReferentielConfig }) {
                           >
                             <Icon name="delete" className="text-[18px]" />
                           </button>
+                          </>
+                          )}
                         </div>
                       </TD>
                     </TR>

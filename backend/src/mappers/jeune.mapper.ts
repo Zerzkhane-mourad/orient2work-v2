@@ -1,5 +1,7 @@
 import type { JeuneStatus } from "@prisma/client";
 import type { JeuneFull } from "../repositories/jeune.repository.js";
+import { env } from "../config/env.js";
+import { referenceCertificat } from "../domain/certificat.js";
 import { computeProfilCompletion, computeScoreJeune } from "../domain/profil.js";
 
 export interface ExperienceDto {
@@ -16,6 +18,43 @@ export interface LienDto {
   id: string;
   type: string;
   url: string;
+}
+
+/**
+ * Formation suivie sur la plateforme, telle qu'un recruteur la lit.
+ *
+ * Le profil n'exposait que des identifiants (`formationsValidees`) et un
+ * compte : la fiche talent affichait « 3 formation(s) validée(s) » sans jamais
+ * dire lesquelles — l'information la plus utile au recruteur, et la seule que
+ * la plateforme certifie elle-même.
+ */
+export interface FormationSuivieDto {
+  /** Identifiant de la FORMATION, pas de la progression. */
+  id: string;
+  titre: string;
+  categorie: string;
+  niveau?: string;
+  /** La formation délivre un certificat à qui réussit son quiz. */
+  certifiante: boolean;
+  tempsLectureMin: number;
+  /** Avancement de lecture, 0–100. */
+  progression: number;
+  /** Cours lu jusqu'au bout. */
+  lu: boolean;
+  /** Quiz réussi — c'est ce qui fait la formation « validée ». */
+  valide: boolean;
+  /** Meilleur score au quiz, en %. */
+  meilleurScore?: number;
+  /** ISO — date de réussite du quiz. */
+  valideAt?: string;
+  /**
+   * Référence du certificat, `O2W-CERT-2026-00042`.
+   *
+   * Présente uniquement si le jeune a consulté son certificat au moins une
+   * fois : le numéro est tiré de la séquence à ce moment-là. Le PDF, lui,
+   * reste derrière le jeton du candidat — seule la référence est publiée.
+   */
+  certificat?: string;
 }
 
 /** Miroir de l'interface `Jeune` du frontend (src/lib/types.ts). */
@@ -50,6 +89,15 @@ export interface JeuneDto {
   formationsValidees: string[];
   scoresFormations: Record<string, number>;
   formationsCompletees: number;
+  /**
+   * Parcours de formation détaillé, validées d'abord.
+   *
+   * Double emploi assumé avec `formationsLues` / `formationsValidees` /
+   * `scoresFormations` : ces trois-là sont des index par identifiant, consommés
+   * par le calcul de score et les écrans du jeune ; celui-ci est une LISTE
+   * lisible, pour l'affichage.
+   */
+  formations: FormationSuivieDto[];
   candidatures: number;
   /** Score d'employabilité dérivé (0–100). */
   score: number;
@@ -79,6 +127,49 @@ function completionInput(jeune: JeuneFull) {
     experiencesCount: jeune.experiences.length,
     liensCount: jeune.liens.length,
   };
+}
+
+/**
+ * Parcours de formation, ordonné par ce qui compte pour un lecteur.
+ *
+ * Les formations VALIDÉES d'abord, de la plus récente à la plus ancienne —
+ * c'est l'acquis, et le dernier acquis est le plus parlant. Viennent ensuite
+ * les cours seulement lus ou en cours, par avancement décroissant. Une
+ * progression à 0, ni lue ni validée, n'est pas un parcours : elle est écartée,
+ * sans quoi la moindre formation ouverte une fois viendrait gonfler la liste.
+ */
+function toFormationsSuivies(jeune: JeuneFull): FormationSuivieDto[] {
+  return jeune.progressions
+    .filter((progression) => progression.valide || progression.lu || progression.progression > 0)
+    .map((progression) => ({
+      id: progression.formationId,
+      titre: progression.formation.titre,
+      categorie: progression.formation.categorie.nom,
+      ...(progression.formation.niveau ? { niveau: progression.formation.niveau } : {}),
+      certifiante: progression.formation.certifiante,
+      tempsLectureMin: progression.formation.tempsLectureMin,
+      progression: progression.progression,
+      lu: progression.lu,
+      valide: progression.valide,
+      ...(progression.meilleurScore !== null ? { meilleurScore: progression.meilleurScore } : {}),
+      ...(progression.valideAt ? { valideAt: progression.valideAt.toISOString() } : {}),
+      // Le numéro n'existe qu'une fois le certificat consulté : une formation
+      // validée sans numéro est normale, et la fiche ne montre alors rien.
+      ...(progression.certificatNumero !== null && progression.valideAt
+        ? {
+            certificat: referenceCertificat(
+              progression.certificatNumero,
+              progression.valideAt,
+              env.APP_TIMEZONE,
+            ),
+          }
+        : {}),
+    }))
+    .sort((a, b) => {
+      if (a.valide !== b.valide) return a.valide ? -1 : 1;
+      if (a.valide && b.valide) return (b.valideAt ?? "").localeCompare(a.valideAt ?? "");
+      return b.progression - a.progression;
+    });
 }
 
 export function toJeuneDto(jeune: JeuneFull): JeuneDto {
@@ -140,6 +231,7 @@ export function toJeuneDto(jeune: JeuneFull): JeuneDto {
     formationsValidees,
     scoresFormations,
     formationsCompletees: formationsValidees.length,
+    formations: toFormationsSuivies(jeune),
     candidatures,
     score,
   };

@@ -124,8 +124,47 @@ describe("Acceptation d'une candidature spontanée", () => {
   });
 });
 
+describe("Lien obligatoire à la proposition", () => {
+  it("refuse une proposition sans lien, avec un message clair", async () => {
+    const entreprise = await createEntreprise(app);
+    const jeune = await createJeune(app);
+
+    const reponse = await request(app)
+      .post(`${API}/entretiens`)
+      .set(...auth(entreprise.accessToken))
+      .send({
+        jeuneId: jeune.jeuneId,
+        offreTitre: "Développeur frontend",
+        date: isoInDays(4),
+        heure: "14:00",
+      })
+      .expect(422);
+
+    expect(JSON.stringify(reponse.body)).toContain("lien de visioconférence est obligatoire");
+    // Rien n'a été créé : le candidat ne reçoit pas d'invitation injoignable.
+    expect(await prisma.entretien.count()).toBe(0);
+  });
+
+  it("refuse un lien vide ou fait d'espaces", async () => {
+    const entreprise = await createEntreprise(app);
+    const jeune = await createJeune(app);
+
+    await request(app)
+      .post(`${API}/entretiens`)
+      .set(...auth(entreprise.accessToken))
+      .send({
+        jeuneId: jeune.jeuneId,
+        offreTitre: "Développeur frontend",
+        date: isoInDays(4),
+        heure: "14:00",
+        lienReunion: "   ",
+      })
+      .expect(422);
+  });
+});
+
 describe("Qui fournit le lien", () => {
-  it("interdit au candidat d'en poser un sur un entretien qu'on lui propose", async () => {
+  it("interdit au candidat de remplacer le lien d'un entretien qu'on lui propose", async () => {
     const entreprise = await createEntreprise(app);
     const jeune = await createJeune(app);
 
@@ -137,6 +176,7 @@ describe("Qui fournit le lien", () => {
         offreTitre: "Développeur frontend",
         date: isoInDays(4),
         heure: "14:00",
+        lienReunion: LIEN,
       })
       .expect(201);
 
@@ -144,13 +184,14 @@ describe("Qui fournit le lien", () => {
     await request(app)
       .post(`${API}/entretiens/${propose.body.data.id}/reponse`)
       .set(...auth(jeune.accessToken))
-      .send({ status: "accepte", lienReunion: LIEN })
+      .send({ status: "accepte", lienReunion: "https://zoom.us/j/autre-salle" })
       .expect(403);
 
     const apres = await prisma.entretien.findUniqueOrThrow({
       where: { id: propose.body.data.id },
     });
-    expect(apres.lienReunion).toBeNull();
+    // Le lien de l'entreprise est intact, et la demande toujours à traiter.
+    expect(apres.lienReunion).toBe(LIEN);
     expect(apres.status).toBe("en_attente");
   });
 

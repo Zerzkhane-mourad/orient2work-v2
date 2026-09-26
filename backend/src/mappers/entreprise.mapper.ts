@@ -16,13 +16,17 @@ export interface EntrepriseDto {
   status: EntrepriseStatus;
   /** Palette de l'espace entreprise (préférence d'interface). */
   theme: string;
+  /** Couleur principale du logo — source du thème « auto ». */
+  themeCouleur?: string;
+  /** Couleur d'accent du logo, si le logo en contient une seconde. */
+  themeAccent?: string;
   offresPubliees: number;
 }
 
 /** Vue publique : ni contact du responsable, ni téléphone, ni préférence d'interface. */
 export type EntreprisePublicDto = Omit<
   EntrepriseDto,
-  "emailResponsable" | "telephone" | "responsable" | "theme"
+  "emailResponsable" | "telephone" | "responsable" | "theme" | "themeCouleur" | "themeAccent"
 >;
 
 export function toEntrepriseDto(entreprise: EntrepriseFull): EntrepriseDto {
@@ -39,6 +43,8 @@ export function toEntrepriseDto(entreprise: EntrepriseFull): EntrepriseDto {
     telephone: entreprise.telephone,
     status: entreprise.status,
     theme: entreprise.theme,
+    ...(entreprise.themeCouleur ? { themeCouleur: entreprise.themeCouleur } : {}),
+    ...(entreprise.themeAccent ? { themeAccent: entreprise.themeAccent } : {}),
     offresPubliees: entreprise._count.offres,
   };
 }
@@ -49,6 +55,8 @@ export function toEntreprisePublicDto(entreprise: EntrepriseFull): EntreprisePub
     telephone: _telephone,
     responsable: _responsable,
     theme: _theme,
+    themeCouleur: _themeCouleur,
+    themeAccent: _themeAccent,
     ...rest
   } = toEntrepriseDto(entreprise);
   return rest;

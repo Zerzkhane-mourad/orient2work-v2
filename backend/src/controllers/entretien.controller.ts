@@ -46,6 +46,11 @@ export async function update(req: Request, res: Response): Promise<void> {
   );
 }
 
+export async function retirerDemandeSpontanee(req: Request, res: Response): Promise<void> {
+  const { id } = params<{ id: string }>(req);
+  sendSuccess(res, await entretienService.retirerDemandeSpontanee(currentActor(req), id));
+}
+
 // ── Test de validation général ───────────────────────────────────────────────
 
 export async function getQuiz(req: Request, res: Response): Promise<void> {

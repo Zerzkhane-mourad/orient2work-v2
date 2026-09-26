@@ -12,6 +12,7 @@ import {
   setCsrfCookie,
   setRefreshCookie,
 } from "../lib/cookies.js";
+import { ValidationError } from "../lib/errors.js";
 import { sendNoContent, sendSuccess } from "../lib/http.js";
 import { issueCsrfToken } from "../middlewares/csrf.js";
 import { currentActor } from "../middlewares/authorize.js";
@@ -56,8 +57,23 @@ export async function registerJeune(req: Request, res: Response): Promise<void> 
   sendSuccess(res, result, 201);
 }
 
+/**
+ * Le logo arrive dans `req.file` (multer, posé par la route). Son absence est
+ * refusée ici plutôt que dans le schéma zod : zod valide `req.body`, où un
+ * fichier multipart n'apparaît pas. Le message emprunte la forme des erreurs de
+ * validation pour que le formulaire le rattache au bon champ.
+ */
 export async function registerEntreprise(req: Request, res: Response): Promise<void> {
-  const result = await authService.registerEntreprise(body<RegisterEntrepriseInput>(req));
+  if (!req.file) {
+    throw new ValidationError("Le logo de l'entreprise est obligatoire.", [
+      { field: "logo", message: "champ obligatoire" },
+    ]);
+  }
+
+  const result = await authService.registerEntreprise(
+    body<RegisterEntrepriseInput>(req),
+    req.file,
+  );
   sendSuccess(res, result, 201);
 }
 

@@ -72,17 +72,19 @@ async function createAccount(
   password: string,
   role: Role,
   emailVerified = true,
+  extra: { nom?: string; roleAdminId?: string } = {},
 ): Promise<string> {
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.upsert({
     where: { email },
-    update: { passwordHash, role, emailVerified },
+    update: { passwordHash, role, emailVerified, ...extra },
     create: {
       email,
       passwordHash,
       role,
       emailVerified,
       emailVerifiedAt: emailVerified ? new Date() : null,
+      ...extra,
     },
   });
   return user.id;
@@ -92,8 +94,43 @@ async function main(): Promise<void> {
   console.log("→ Seed Orient2Work");
 
   // ── Admin ──────────────────────────────────────────────────────────────────
-  await createAccount(ADMIN_EMAIL, ADMIN_PASSWORD, Role.ADMIN);
+  //
+  // Le rôle est INDISPENSABLE : un compte ADMIN sans rôle n'a aucune permission
+  // et se connecterait sur un back-office vide. Le rôle système est amorcé par
+  // la migration `roles_admin` ; on l'upsert ici pour que le seed reste jouable
+  // sur une base qui l'aurait perdu.
+  const roleSysteme = await prisma.roleAdmin.upsert({
+    where: { nom: "Super administrateur" },
+    update: {},
+    create: {
+      nom: "Super administrateur",
+      description:
+        "Accès complet au back-office. Rôle système : ses permissions suivent automatiquement le catalogue.",
+      // Vide à dessein : les droits d'un rôle système sont CALCULÉS à la lecture
+      // (voir src/domain/permissions.ts), jamais recopiés en base.
+      permissions: [],
+      systeme: true,
+    },
+  });
+
+  await createAccount(ADMIN_EMAIL, ADMIN_PASSWORD, Role.ADMIN, true, {
+    nom: "Équipe OMB",
+    roleAdminId: roleSysteme.id,
+  });
   console.log(`  ✓ admin : ${ADMIN_EMAIL}`);
+
+  // Rôle de démonstration : montre à quoi sert l'écran « Rôles et permissions »
+  // sur une base fraîche, où seul le rôle système existerait sinon.
+  await prisma.roleAdmin.upsert({
+    where: { nom: "Modérateur des contenus" },
+    update: {},
+    create: {
+      nom: "Modérateur des contenus",
+      description: "Modère les offres et tient la FAQ, sans toucher aux comptes ni aux accès.",
+      permissions: ["statistiques:read", "offres:read", "offres:write", "faq:read", "faq:write"],
+    },
+  });
+  console.log("  ✓ rôles d'administration");
 
   // ── Référentiels administrables (§7.4) ─────────────────────────────────────
   //

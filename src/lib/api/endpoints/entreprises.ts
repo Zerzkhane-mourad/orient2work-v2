@@ -5,6 +5,12 @@ import type { ApiEntreprise, ApiEntreprisePublic, EntrepriseThemeId, Paginated }
 export interface UpdateEntrepriseInput {
   nom?: string;
   theme?: EntrepriseThemeId;
+  /**
+   * Couleurs relevées dans le logo, en hexadécimal `#rrggbb`. Renvoyées à
+   * chaque remplacement du logo ; `null` efface la couleur enregistrée.
+   */
+  themeCouleur?: string | null;
+  themeAccent?: string | null;
   secteur?: string;
   ville?: string;
   siteWeb?: string;

@@ -23,6 +23,13 @@ export interface RegisterJeuneInput {
   etablissement: string;
 }
 
+/**
+ * Inscription d'une entreprise — le LOGO est obligatoire.
+ *
+ * Il part avec le formulaire, en `multipart/form-data`, parce que l'inscription
+ * n'ouvre pas de session : la route de dépôt habituelle (`POST /documents/LOGO`)
+ * est authentifiée, et l'entreprise n'a pas encore de quoi s'y présenter.
+ */
 export interface RegisterEntrepriseInput {
   email: string;
   password: string;
@@ -34,6 +41,14 @@ export interface RegisterEntrepriseInput {
   responsable: string;
   emailResponsable?: string;
   telephone: string;
+  logo: File;
+  /**
+   * Couleurs dominantes relevées dans le logo par le navigateur, qui donneront
+   * son thème à l'espace. Absentes si le logo est achromatique : le compte
+   * démarre alors sur la palette par défaut.
+   */
+  themeCouleur?: string;
+  themeAccent?: string;
 }
 
 export const authApi = {
@@ -44,8 +59,13 @@ export const authApi = {
   registerJeune: (input: RegisterJeuneInput) =>
     http.post<MessageResponse>("/auth/inscription/jeune", input, { autoRefresh: false }),
 
-  registerEntreprise: (input: RegisterEntrepriseInput) =>
-    http.post<MessageResponse>("/auth/inscription/entreprise", input, { autoRefresh: false }),
+  registerEntreprise: ({ logo, ...champs }: RegisterEntrepriseInput) =>
+    http.postForm<MessageResponse>(
+      "/auth/inscription/entreprise",
+      champs,
+      { logo },
+      { autoRefresh: false },
+    ),
 
   /** Ouvre la session et la stocke en mémoire (jamais dans localStorage). */
   async login(email: string, password: string): Promise<User> {

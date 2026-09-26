@@ -88,8 +88,17 @@ function buildFilter(type: DocumentType) {
   };
 }
 
-/** Construit un middleware multer pour un usage donné (un seul fichier). */
-export function uploadSingle(type: DocumentType, field = "file") {
+/**
+ * Construit un middleware multer pour un usage donné (un seul fichier).
+ *
+ * `maxFields` borne le nombre de champs texte accompagnant le fichier. La
+ * valeur par défaut couvre les dépôts simples (`POST /documents/:type`, où le
+ * fichier voyage seul) ; un formulaire complet envoyé en multipart, comme
+ * l'inscription entreprise, doit l'élever à la taille de son propre schéma.
+ * Trop bas, multer rejette la requête avec `LIMIT_FIELD_COUNT` — une erreur qui
+ * se lirait comme « fichier refusé » alors que le fichier n'y est pour rien.
+ */
+export function uploadSingle(type: DocumentType, field = "file", maxFields = 10) {
   return multer({
     storage: multer.diskStorage({
       destination: (_req, _file, callback) => {
@@ -103,7 +112,7 @@ export function uploadSingle(type: DocumentType, field = "file") {
         callback(null, `${randomUUID()}${extension}`);
       },
     }),
-    limits: { fileSize: env.UPLOAD_MAX_SIZE_BYTES, files: 1, fields: 10 },
+    limits: { fileSize: env.UPLOAD_MAX_SIZE_BYTES, files: 1, fields: maxFields },
     fileFilter: buildFilter(type),
   }).single(field);
 }

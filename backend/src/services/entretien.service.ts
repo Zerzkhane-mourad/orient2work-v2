@@ -17,7 +17,7 @@ import { ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { scoreQuiz } from "../domain/quiz.js";
 import { buildMeta, toSkipTake } from "../lib/pagination.js";
 import { stripTags } from "../lib/sanitize.js";
-import { isAdmin, type Actor } from "../middlewares/authorize.js";
+import { assertPermission, isAdmin, type Actor } from "../middlewares/authorize.js";
 import * as repository from "../repositories/entretien.repository.js";
 import * as jeuneRepository from "../repositories/jeune.repository.js";
 import * as entrepriseRepository from "../repositories/entreprise.repository.js";
@@ -43,10 +43,25 @@ function scopeFor(actor: Actor): { jeuneId?: string; entrepriseId?: string } {
   return {};
 }
 
+/**
+ * Gouverne la SEULE branche administrateur de cette route partagée.
+ *
+ * Un jeune et une entreprise y sont bornés à leur propre périmètre ; l'admin,
+ * lui, voit tous les entretiens de la plateforme — c'est ce privilège qu'exige
+ * `entretiens:read`. Contrairement aux formations, il n'y a pas de repli
+ * possible : un administrateur n'a pas de périmètre propre auquel le ramener,
+ * le refus est donc la seule réponse honnête.
+ */
+async function assertPorteeAdmin(actor: Actor): Promise<void> {
+  if (isAdmin(actor)) await assertPermission(actor, "entretiens:read");
+}
+
 export async function list(
   actor: Actor,
   input: ListEntretiensInput,
 ): Promise<{ items: EntretienDto[]; meta: ApiMeta }> {
+  await assertPorteeAdmin(actor);
+
   const where = repository.buildEntretienWhere({
     ...scopeFor(actor),
     status: input.status,
@@ -66,7 +81,8 @@ export async function list(
  * Les écrans d'entretiens listent chaque statut dans sa propre section paginée ;
  * les compteurs d'en-tête portent, eux, sur la totalité.
  */
-export function countByStatus(actor: Actor): Promise<Record<string, number>> {
+export async function countByStatus(actor: Actor): Promise<Record<string, number>> {
+  await assertPorteeAdmin(actor);
   return repository.countEntretiensByStatus(repository.buildEntretienWhere(scopeFor(actor)));
 }
 
@@ -269,6 +285,66 @@ export async function update(
           : "Entretien replanifié",
       detail: entretien.offreTitre,
       href: "/espace-jeune/entretiens",
+    });
+  }
+
+  return toEntretienDto(updated);
+}
+
+/**
+ * Retrait par le candidat de sa propre candidature spontanée.
+ *
+ * ── Pourquoi une transition à part ──────────────────────────────────────────
+ *
+ * Le candidat réservait un créneau sans aucun moyen de revenir dessus :
+ * `respond` appartient à l'entreprise sur une demande spontanée, et `update`
+ * est réservée à l'entreprise organisatrice. Une erreur de créneau l'enfermait
+ * donc jusqu'à la réponse du recruteur — une seule réservation active étant
+ * permise par entreprise, il ne pouvait ni corriger, ni réserver ailleurs chez
+ * elle, ni renoncer.
+ *
+ * Le créneau est rendu du même coup : `listCreneauxOccupes` ignore les
+ * entretiens annulés, un autre candidat peut donc le prendre immédiatement.
+ *
+ * Volontairement étroit — demande SPONTANÉE, ENCORE EN ATTENTE, la SIENNE :
+ * élargir `update` au candidat lui aurait ouvert la replanification et le lien
+ * de réunion, qui appartiennent à l'organisateur.
+ */
+export async function retirerDemandeSpontanee(actor: Actor, id: string): Promise<EntretienDto> {
+  if (actor.role !== Role.JEUNE || !actor.profileId) {
+    throw new ForbiddenError("Action réservée aux comptes jeunes.");
+  }
+
+  const entretien = await repository.findEntretienById(id);
+  if (!entretien) throw new NotFoundError("Entretien introuvable.");
+
+  if (entretien.jeuneId !== actor.profileId) {
+    throw new ForbiddenError("Cette demande n'est pas la vôtre.");
+  }
+  if (!entretien.spontanee) {
+    throw new ForbiddenError(
+      "Seule une candidature spontanée se retire ; répondez à l'invitation reçue.",
+    );
+  }
+  if (entretien.status !== EntretienStatus.en_attente) {
+    throw new ForbiddenError("Cette demande a déjà été traitée.");
+  }
+
+  const updated = await repository.updateEntretien(id, { status: EntretienStatus.annule });
+
+  /*
+   * L'entreprise est prévenue : la demande figurait dans sa file « à traiter »,
+   * et elle y resterait, sans quoi le recruteur ouvrirait une fiche pour
+   * découvrir une décision déjà sans objet.
+   */
+  const entreprise = await entrepriseRepository.findEntrepriseById(entretien.entrepriseId);
+  if (entreprise) {
+    await notify({
+      userId: entreprise.userId,
+      icon: "event_busy",
+      title: `${entretien.jeune.prenom} ${entretien.jeune.nom} a retiré sa candidature spontanée`,
+      detail: `${entretien.date.toISOString().split("T")[0]} à ${entretien.heure} — le créneau est de nouveau libre.`,
+      href: "/espace-entreprise/entretiens",
     });
   }
 

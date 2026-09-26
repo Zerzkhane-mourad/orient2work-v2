@@ -30,6 +30,7 @@ import {
   RetourLien,
   StatusBadge,
 } from "@/components/ui";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import { QUIZ_PASS_SCORE } from "@/lib/constants";
 import type { JeuneStatus } from "@/lib/api/types";
@@ -45,6 +46,10 @@ export default function AdminJeuneDetailPage({ params }: { params: Promise<{ id:
     refetch,
     setData,
   } = useApi(() => api.admin.jeuneById(id), [id]);
+
+  // La fiche reste consultable en lecture seule ; seules les actions
+  // de statut demandent `jeunes:write`.
+  const peutEcrire = useCan("jeunes:write");
 
   const { run: setStatus, pending, error: actionError } = useMutation(api.admin.setJeuneStatus);
 
@@ -107,6 +112,7 @@ export default function AdminJeuneDetailPage({ params }: { params: Promise<{ id:
             </div>
           </div>
 
+          {peutEcrire && (
           <div className="flex shrink-0 flex-col gap-2 sm:w-52">
             {/* La validation manuelle sert aux cas traités hors ligne par OMB. */}
             {jeune.status !== "valide" && (
@@ -136,6 +142,7 @@ export default function AdminJeuneDetailPage({ params }: { params: Promise<{ id:
               </Button>
             )}
           </div>
+          )}
         </CardBody>
       </Card>
 

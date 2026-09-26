@@ -26,6 +26,7 @@ import {
   TableEmpty,
   TableSkeleton,
 } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiFormationSummary } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -39,6 +40,11 @@ const PER_PAGE = 20;
 const COLUMNS = 6;
 
 export default function AdminFormationsPage() {
+  // La consultation du catalogue reste ouverte à `formations:read` ; seules les
+  // actions d'écriture sont masquées. Les afficher pour les voir échouer en 403
+  // reviendrait à promettre ce que le serveur refuse.
+  const peutEcrire = useCan("formations:write");
+
   // Le filtre retient l'IDENTIFIANT de la catégorie, pas son libellé : renommer
   // une entrée depuis les référentiels ne doit pas vider la liste.
   const [categorieId, setCategorieId] = useState<string>(TOUTES);
@@ -80,9 +86,11 @@ export default function AdminFormationsPage() {
         title="Gestion des formations"
         subtitle="Ajoutez et organisez le catalogue de formations."
         actions={
-          <ButtonLink href="/admin/formations/nouvelle" variant="secondary">
-            <Icon name="add" className="text-[18px]" /> Nouvelle formation
-          </ButtonLink>
+          peutEcrire && (
+            <ButtonLink href="/admin/formations/nouvelle" variant="secondary">
+              <Icon name="add" className="text-[18px]" /> Nouvelle formation
+            </ButtonLink>
+          )
         }
       />
 
@@ -152,24 +160,28 @@ export default function AdminFormationsPage() {
                         >
                           <Icon name="visibility" className="text-[18px]" />
                         </ButtonLink>
-                        <ButtonLink
-                          href={`/admin/formations/${f.id}`}
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Modifier « ${f.titre} »`}
-                          title="Modifier"
-                        >
-                          <Icon name="edit" className="text-[18px]" />
-                        </ButtonLink>
-                        <button
-                          type="button"
-                          onClick={() => setDeleting(f)}
-                          disabled={pending}
-                          className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
-                          aria-label="Supprimer"
-                        >
-                          <Icon name="delete" className="text-[18px]" />
-                        </button>
+                        {peutEcrire && (
+                          <>
+                            <ButtonLink
+                              href={`/admin/formations/${f.id}`}
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Modifier « ${f.titre} »`}
+                              title="Modifier"
+                            >
+                              <Icon name="edit" className="text-[18px]" />
+                            </ButtonLink>
+                            <button
+                              type="button"
+                              onClick={() => setDeleting(f)}
+                              disabled={pending}
+                              className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
+                              aria-label="Supprimer"
+                            >
+                              <Icon name="delete" className="text-[18px]" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </TD>
                   </TR>

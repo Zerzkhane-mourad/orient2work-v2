@@ -26,6 +26,7 @@ import {
   TableEmpty,
   TableSkeleton,
 } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { JeuneStatus } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -58,6 +59,10 @@ export default function AdminJeunesPage() {
 }
 
 function Contenu() {
+  // La consultation reste ouverte à `jeunes:read` ; seules les actions de
+  // statut sont masquées, faute de quoi elles partiraient en 403 au clic.
+  const peutEcrire = useCan("jeunes:write");
+
   const { filieres } = useFilieres();
   const { valeurs, definir, reinitialiser, actifs } = useFiltresUrl(FILTRES);
   const query = valeurs.q;
@@ -202,7 +207,7 @@ function Contenu() {
                           lire. Le contour garde l'action évidente et rend son
                           poids visuel à la colonne « statut ».
                         */}
-                        {j.status !== "valide" && (
+                        {peutEcrire && j.status !== "valide" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -212,27 +217,28 @@ function Contenu() {
                             Valider
                           </Button>
                         )}
-                        {j.status !== "suspendu" ? (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => void apply(j.id, "suspendu")}
-                            className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
-                            aria-label="Suspendre"
-                            title="Suspendre"
-                          >
-                            <Icon name="block" className="text-[18px]" />
-                          </button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={pending}
-                            onClick={() => void apply(j.id, "inscrit")}
-                          >
-                            Réactiver
-                          </Button>
-                        )}
+                        {peutEcrire &&
+                          (j.status !== "suspendu" ? (
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void apply(j.id, "suspendu")}
+                              className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
+                              aria-label="Suspendre"
+                              title="Suspendre"
+                            >
+                              <Icon name="block" className="text-[18px]" />
+                            </button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={pending}
+                              onClick={() => void apply(j.id, "inscrit")}
+                            >
+                              Réactiver
+                            </Button>
+                          ))}
                       </div>
                     </TD>
                   </TR>

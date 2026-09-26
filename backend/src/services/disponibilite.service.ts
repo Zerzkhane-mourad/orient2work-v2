@@ -71,6 +71,14 @@ function versDates(lignes: Array<{ date: Date; debut: string; fin: string }>): D
   return [...parDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Réservation active du candidat auprès d'une entreprise. */
+export interface DemandeEnCoursDto {
+  id: string;
+  date: string;
+  heure: string;
+  status: "en_attente" | "accepte";
+}
+
 export interface EntrepriseOuverteDto {
   id: string;
   nom: string;
@@ -83,6 +91,13 @@ export interface EntrepriseOuverteDto {
   journeesOuvertes: number;
   /** Première journée ouverte, `YYYY-MM-DD` ; `null` s'il n'en reste aucune. */
   prochaineDate: string | null;
+  /**
+   * Demande déjà posée par le candidat chez cette entreprise, s'il y en a une.
+   *
+   * Présent en LISTE seulement : sur la fiche, l'information vit au niveau du
+   * calendrier (`CalendrierDto.demandeEnCours`), qui porte le même contenu.
+   */
+  demandeEnCours?: DemandeEnCoursDto | null;
 }
 
 /** Résumé d'ouverture affiché sur la fiche, sans recalculer les créneaux. */
@@ -211,6 +226,7 @@ async function assertJeuneValide(actor: Actor): Promise<string> {
 }
 
 export async function listEntreprisesOuvertes(
+  actor: Actor,
   input: ListEntreprisesOuvertesInput,
 ): Promise<{ items: EntrepriseOuverteDto[]; meta: ApiMeta }> {
   const { skip, take } = toSkipTake(input);
@@ -231,6 +247,34 @@ export async function listEntreprisesOuvertes(
 
   const [rows, total] = await repository.listEntreprisesOuvertes(skip, take, ids);
 
+  /*
+   * Demandes déjà posées, pour les seules entreprises de CETTE page : la fiche
+   * doit annoncer « demande en attente » avant d'être ouverte, sinon le
+   * candidat clique pour découvrir qu'il n'a rien à y faire.
+   *
+   * Une requête par page, jamais une par fiche — et aucune quand la liste est
+   * consultée par autre chose qu'un compte jeune.
+   */
+  const demandes =
+    actor.role === Role.JEUNE && actor.profileId && rows.length > 0
+      ? await repository.listDemandesSpontaneesEnCours(
+          actor.profileId,
+          rows.map((entreprise) => entreprise.id),
+        )
+      : [];
+
+  const parEntreprise = new Map<string, DemandeEnCoursDto>();
+  for (const demande of demandes) {
+    // `orderBy` croissant : la première rencontrée est la plus proche.
+    if (parEntreprise.has(demande.entrepriseId)) continue;
+    parEntreprise.set(demande.entrepriseId, {
+      id: demande.id,
+      date: dateIsoUtc(demande.date),
+      heure: demande.heure,
+      status: demande.status === "accepte" ? "accepte" : "en_attente",
+    });
+  }
+
   return {
     items: rows.map((entreprise) => ({
       id: entreprise.id,
@@ -241,6 +285,7 @@ export async function listEntreprisesOuvertes(
       spontaneeMessage: entreprise.spontaneeMessage,
       creneauDureeMin: entreprise.creneauDureeMin,
       ...resumeOuverture(entreprise.disponibilites),
+      demandeEnCours: parEntreprise.get(entreprise.id) ?? null,
     })),
     meta: buildMeta(input, total),
   };

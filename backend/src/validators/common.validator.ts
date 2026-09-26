@@ -45,6 +45,19 @@ export const phoneSchema = z
 
 export const urlSchema = z.string().trim().url("URL invalide").max(500);
 
+/**
+ * Couleur hexadécimale sur 6 chiffres, normalisée en minuscules (`#c81e3a`).
+ *
+ * Forme longue seule : ces valeurs finissent dans une propriété CSS, et
+ * n'accepter qu'UNE écriture évite d'avoir à réconcilier `#abc` et `#aabbcc`
+ * au moment de comparer un thème à celui déjà enregistré.
+ */
+export const hexColorSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^#[0-9a-f]{6}$/, "couleur hexadécimale invalide (#rrggbb attendu)");
+
 /** Liste de chaînes courtes, dédoublonnée et bornée. */
 export function tagList(maxItems = 30, maxLength = 60) {
   return z

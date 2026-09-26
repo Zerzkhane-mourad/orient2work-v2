@@ -20,6 +20,7 @@ import { useMutation } from "@/lib/api/use-api";
 import { NIVEAUX_ETUDES, type Role } from "@/lib/constants";
 import { useFilieres } from "@/features/admin/use-referentiel";
 import { cn } from "@/lib/utils";
+import { LogoEntrepriseField, type LogoEntreprise } from "./logo-entreprise-field";
 import { PasswordField, isPasswordValid } from "./password-field";
 
 type RegisterRole = Extract<Role, "jeune" | "entreprise">;
@@ -85,6 +86,9 @@ export function RegisterForm() {
 
   const [jeune, setJeune] = useState(EMPTY_JEUNE);
   const [entreprise, setEntreprise] = useState(EMPTY_ENTREPRISE);
+  // Logo obligatoire pour une entreprise : il sert d'image de compte ET de
+  // source au thème de l'espace (cf. `logo-entreprise-field.tsx`).
+  const [logo, setLogo] = useState<LogoEntreprise | null>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [cguAcceptees, setCguAcceptees] = useState(false);
@@ -108,6 +112,10 @@ export function RegisterForm() {
       return jeune.email;
     }
 
+    // `canSubmit` garantit la présence du logo ; ce garde-fou n'existe que pour
+    // le typage, `run` n'étant pas atteignable sans lui.
+    if (!logo) return "";
+
     await api.auth.registerEntreprise({
       email: entreprise.email,
       password,
@@ -116,6 +124,9 @@ export function RegisterForm() {
       ville: entreprise.ville,
       responsable: entreprise.responsable,
       telephone: entreprise.telephone,
+      logo: logo.fichier,
+      themeCouleur: logo.couleur,
+      themeAccent: logo.accent,
     });
     return entreprise.email;
   });
@@ -158,7 +169,12 @@ export function RegisterForm() {
    * formulaire est en `noValidate` — pour afficher NOS messages plutôt que ceux
    * du navigateur — ce qui neutralisait complètement cette obligation.
    */
-  const canSubmit = isPasswordValid(password) && password === confirm && cguAcceptees;
+  // Le logo conditionne l'inscription d'une entreprise : l'API la refuse sans
+  // lui, autant le dire avant l'envoi plutôt qu'après un aller-retour.
+  const logoManquant = role === "entreprise" && !logo;
+
+  const canSubmit =
+    isPasswordValid(password) && password === confirm && cguAcceptees && !logoManquant;
 
   /**
    * Pourquoi le bouton reste inactif.
@@ -166,13 +182,15 @@ export function RegisterForm() {
    * Un bouton désactivé sans explication est une impasse : l'utilisateur ne
    * voit pas ce qui manque, surtout quand la cause est un champ plus haut.
    */
-  const blocage = !isPasswordValid(password)
-    ? "Choisissez un mot de passe respectant les critères ci-dessus."
-    : password !== confirm
-      ? "Les deux mots de passe doivent être identiques."
-      : !cguAcceptees
-        ? "Acceptez les conditions générales pour continuer."
-        : null;
+  const blocage = logoManquant
+    ? "Ajoutez le logo de votre entreprise pour continuer."
+    : !isPasswordValid(password)
+      ? "Choisissez un mot de passe respectant les critères ci-dessus."
+      : password !== confirm
+        ? "Les deux mots de passe doivent être identiques."
+        : !cguAcceptees
+          ? "Acceptez les conditions générales pour continuer."
+          : null;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -210,11 +228,14 @@ export function RegisterForm() {
         ];
 
   // Les deux mots de passe comptent pour un seul « champ » : ils se remplissent
-  // d'un même geste et les séparer donnerait un compteur qui stagne.
-  const total = champsObligatoires.length + 1;
+  // d'un même geste et les séparer donnerait un compteur qui stagne. Le logo
+  // compte, lui, comme un champ à part entière — c'est un geste de plus, et le
+  // décompte mentirait en l'ignorant.
+  const total = champsObligatoires.length + 1 + (role === "entreprise" ? 1 : 0);
   const remplis =
     champsObligatoires.filter((valeur) => valeur.trim() !== "").length +
-    (isPasswordValid(password) && password === confirm ? 1 : 0);
+    (isPasswordValid(password) && password === confirm ? 1 : 0) +
+    (role === "entreprise" && logo ? 1 : 0);
   const restants = total - remplis;
 
   /*
@@ -560,6 +581,11 @@ export function RegisterForm() {
               onChange={(e) => setEntreprise({ ...entreprise, secteur: e.target.value })}
               error={error?.issueFor("secteur")}
               required
+            />
+            <LogoEntrepriseField
+              value={logo}
+              onChange={setLogo}
+              error={error?.issueFor("logo")}
             />
           </>
         )}

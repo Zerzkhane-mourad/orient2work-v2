@@ -12,6 +12,27 @@ import {
   uuidSchema,
 } from "./common.validator.js";
 
+const LIEN_OBLIGATOIRE = "le lien de visioconférence est obligatoire";
+
+/**
+ * Lien de visio OBLIGATOIRE à la proposition.
+ *
+ * Proposé sans lien, un entretien accepté n'était joignable nulle part : le
+ * candidat n'avait aucun moyen de rejoindre la réunion, et le rappel envoyé une
+ * heure avant partait sans bouton « rejoindre ». L'entreprise qui PROPOSE
+ * organise : elle fournit la salle au moment où elle fixe l'heure.
+ *
+ * Seule la proposition est concernée. Sur une candidature spontanée, c'est le
+ * candidat qui crée le rendez-vous, et l'entreprise l'accepte éventuellement
+ * sur place — le lien y reste facultatif.
+ */
+const lienReunionObligatoire = z
+  .string({ required_error: LIEN_OBLIGATOIRE })
+  .trim()
+  .min(1, LIEN_OBLIGATOIRE)
+  .url("URL invalide")
+  .max(500);
+
 /** Demande d'entretien émise par une entreprise (§10). */
 export const createEntretienSchema = z
   .object({
@@ -24,7 +45,7 @@ export const createEntretienSchema = z
       "la date doit être dans le futur",
     ),
     heure: timeSchema,
-    lienReunion: urlSchema.optional(),
+    lienReunion: lienReunionObligatoire,
     commentaire: longText(1000).optional(),
   })
   .strict();

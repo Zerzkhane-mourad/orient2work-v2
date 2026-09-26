@@ -11,7 +11,8 @@
  * requête. Tout changement de filtre ramène à la page 1 — rester en page 4 d'un
  * résultat qui n'en compte plus qu'une donnerait une liste vide.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { EmptyState, ErrorState, Icon, Pagination, ScrollRow, Skeleton } from "@/components/ui";
 import { useCategories } from "@/features/admin/use-referentiel";
 import { api } from "@/lib/api";
@@ -21,6 +22,7 @@ import { useDebounced } from "@/lib/use-debounced";
 import { useEcrireParams, useParam } from "@/lib/use-url-param";
 import { cn } from "@/lib/utils";
 import { FormationCard } from "./formation-card";
+import { pointNiveau } from "./niveau";
 
 /**
  * Tailles proposées : multiples de 2, 3 et 4, pour que la dernière rangée reste
@@ -45,10 +47,16 @@ const TOUS = "";
 function FilterPill({
   active,
   onClick,
+  point,
+  activeClassName = "border-primary bg-primary text-on-primary shadow-level-1",
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  /** Pastille de couleur — celle que reprennent les cartes. */
+  point?: string;
+  /** Teinte à l'état actif, quand le filtre a sa propre couleur de sens. */
+  activeClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -57,13 +65,20 @@ function FilterPill({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition-colors",
+        "inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-sm font-semibold transition-all duration-200",
         active
-          ? "border-primary bg-primary text-on-primary"
-          : "border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",
+          ? activeClassName
+          : "border-outline-variant bg-surface-container-lowest text-on-surface hover:-translate-y-px hover:border-primary/40 hover:text-primary",
       )}
     >
+      {point && (
+        <span
+          aria-hidden
+          className={cn("h-2.5 w-2.5 rounded-full", point, active && "ring-2 ring-white/80")}
+        />
+      )}
       {children}
+      {active && <Icon name="close" className="-mr-1 text-[16px] opacity-80" />}
     </button>
   );
 }
@@ -72,6 +87,14 @@ export function FormationsCatalog({ detailBase }: FormationsCatalogProps) {
   // L'onglet actif est mémorisé par IDENTIFIANT : renommer une catégorie depuis
   // le back-office ne doit pas vider la liste sous les yeux du visiteur.
   const [categorieId, setCategorieId] = useState<string>(TOUS);
+  // Propre à cette instance : deux catalogues à l'écran ne partageraient pas
+  // le même filet.
+  const filetId = `categorie-filet-${useId()}`;
+  const reduire = useReducedMotion();
+  /** Ressort amorti : le filet arrive franchement, sans rebond qui distrait. */
+  const glisse: Transition = reduire
+    ? { duration: 0 }
+    : { type: "spring", stiffness: 500, damping: 40 };
   const [niveau, setNiveau] = useState<string>("");
   const [certifiante, setCertifiante] = useState(false);
 
@@ -139,22 +162,21 @@ export function FormationsCatalog({ detailBase }: FormationsCatalogProps) {
 
   return (
     <div className="space-y-4">
-      {/* Recherche */}
-      <div className="relative">
+      {/* Recherche — même champ que les offres : en relief, anneau or au focus. */}
+      <div className="group relative">
         <label htmlFor="catalogue-recherche" className="sr-only">
           Rechercher une formation
         </label>
-        <Icon
-          name="search"
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant"
-        />
+        <span className="pointer-events-none absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-focus-within:bg-primary group-focus-within:text-on-primary">
+          <Icon name="search" className="text-[20px]" />
+        </span>
         <input
           id="catalogue-recherche"
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Rechercher une formation…"
-          className="min-h-11 w-full rounded-full border border-outline-variant bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary/40"
+          className="w-full rounded-full border border-outline-variant bg-surface-container-lowest py-3.5 pl-14 pr-4 text-body-md text-on-surface shadow-level-1 transition-shadow placeholder:text-on-surface-variant/80 focus:border-secondary-container focus:shadow-level-2 focus:outline-none focus:ring-4 focus:ring-secondary-container/40"
         />
       </div>
 
@@ -165,39 +187,62 @@ export function FormationsCatalog({ detailBase }: FormationsCatalogProps) {
         activeKey={categorieId}
         className="border-b border-outline-variant"
       >
-        {tabs.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setCategorieId(c.id)}
-            aria-current={categorieId === c.id ? "true" : undefined}
-            // Lu par `ScrollRow` pour ramener l'onglet actif dans le champ.
-            data-active={categorieId === c.id ? "true" : undefined}
-            className={cn(
-              "min-h-11 shrink-0 whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors",
-              categorieId === c.id
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-primary",
-            )}
-          >
-            {c.nom}
-          </button>
-        ))}
+        {tabs.map((c) => {
+          const actif = categorieId === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCategorieId(c.id)}
+              aria-current={actif ? "true" : undefined}
+              // Lu par `ScrollRow` pour ramener l'onglet actif dans le champ.
+              data-active={actif ? "true" : undefined}
+              className={cn(
+                "group relative min-h-12 shrink-0 whitespace-nowrap px-4 text-sm font-bold transition-colors duration-200",
+                actif ? "text-primary" : "text-on-surface-variant hover:text-primary",
+              )}
+            >
+              {c.nom}
+              {/*
+                UN filet partagé (`layoutId`) qui glisse d'une catégorie à
+                l'autre : on voit d'où l'on part et où l'on arrive, au lieu
+                d'une bordure qui s'éteint ici et s'allume là.
+              */}
+              {actif ? (
+                <motion.span
+                  layoutId={filetId}
+                  transition={glisse}
+                  className="absolute inset-x-2 bottom-0 h-[3px] rounded-full bg-primary"
+                />
+              ) : (
+                // Amorce au survol : on devine où le filet irait.
+                <span className="absolute inset-x-2 bottom-0 h-[3px] rounded-full bg-outline-variant opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+              )}
+            </button>
+          );
+        })}
       </ScrollRow>
 
-      {/* Niveau + certifiante */}
+      {/* Niveau + certifiante. Chaque niveau porte sa pastille — la même
+          couleur que l'étiquette des cartes ; « Certifiante » s'allume en or,
+          la couleur de ce qui est ACQUIS. */}
       <div className="flex flex-wrap items-center gap-2">
         {NIVEAUX.map((n) => (
           <FilterPill
             key={n}
             active={niveau === n}
+            point={pointNiveau(n)}
             onClick={() => setNiveau((current) => (current === n ? "" : n))}
           >
             {n}
           </FilterPill>
         ))}
-        <FilterPill active={certifiante} onClick={() => setCertifiante((v) => !v)}>
-          <Icon name="verified" className="text-[16px]" /> Certifiante
+        <FilterPill
+          active={certifiante}
+          onClick={() => setCertifiante((v) => !v)}
+          activeClassName="border-secondary-container bg-secondary-container text-on-secondary-container shadow-level-1"
+        >
+          <Icon name="workspace_premium" className="text-[16px]" /> Certifiante
         </FilterPill>
 
         {filtered && (
@@ -215,7 +260,9 @@ export function FormationsCatalog({ detailBase }: FormationsCatalogProps) {
           sans voir la grille changer. */}
       {meta && !loading && !error && (
         <p aria-live="polite" className="text-sm text-on-surface-variant">
-          {meta.total} formation{meta.total > 1 ? "s" : ""}
+          <span className="font-bold text-primary">
+            {meta.total} formation{meta.total > 1 ? "s" : ""}
+          </span>
           {filtered ? " correspondent à votre recherche" : " au catalogue"}
         </p>
       )}
@@ -236,9 +283,20 @@ export function FormationsCatalog({ detailBase }: FormationsCatalogProps) {
         <div ref={listRef} className="space-y-5">
           {/* Une seule colonne sous 640px : à deux, la carte tombait sous 170px
               de large et titre, note et méta se disputaient la place. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {formations.map((f) => (
-              <FormationCard key={f.id} formation={f} href={hrefFor(f.id)} />
+          {/* Clé sur les filtres : chaque nouveau résultat rejoue l'apparition
+              en cascade, et l'œil voit que la grille a changé. */}
+          <div
+            key={`${categorieId}|${q}|${niveau}|${certifiante}|${page}`}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            {formations.map((f, rang) => (
+              <div
+                key={f.id}
+                className="apparition"
+                style={{ "--rang": rang } as React.CSSProperties}
+              >
+                <FormationCard formation={f} href={hrefFor(f.id)} />
+              </div>
             ))}
           </div>
 

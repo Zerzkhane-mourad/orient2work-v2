@@ -19,7 +19,8 @@ export const entretienRouter = Router();
 /**
  * @route GET /entretiens
  * @desc Entretiens de l'utilisateur connecté (périmètre déduit du rôle).
- * @access Authentifié
+ * @access Authentifié. Pour un ADMIN, dont le périmètre est la plateforme
+ *         entière, le service exige en plus `entretiens:read`.
  */
 entretienRouter.get(
   "/",
@@ -33,7 +34,7 @@ entretienRouter.get(
  * @desc Nombre d'entretiens par statut, sur la TOTALITÉ du périmètre de
  *       l'appelant. Alimente les cartes de synthèse pendant que chaque section
  *       est paginée séparément.
- * @access Authentifié
+ * @access Authentifié. Même règle que ci-dessus pour un ADMIN.
  */
 entretienRouter.get("/compteurs", authenticate, asyncHandler(controller.countByStatus));
 
@@ -63,6 +64,21 @@ entretienRouter.post(
   authenticate,
   validate({ params: idParamSchema, body: respondEntretienSchema }),
   asyncHandler(controller.respond),
+);
+
+/**
+ * @route POST /entretiens/:id/retrait
+ * @desc Retire une candidature spontanée encore en attente, et rend le créneau.
+ * @access JEUNE auteur de la demande. Route distincte de `PATCH /:id`, réservée
+ *         à l'entreprise organisatrice : le candidat ne peut que RENONCER, pas
+ *         replanifier ni poser un lien de réunion.
+ */
+entretienRouter.post(
+  "/:id/retrait",
+  authenticate,
+  requireJeune,
+  validate({ params: idParamSchema }),
+  asyncHandler(controller.retirerDemandeSpontanee),
 );
 
 /**

@@ -25,6 +25,22 @@ export async function resetDatabase(): Promise<void> {
       "action_tokens", "refresh_tokens", "users"
     RESTART IDENTITY CASCADE
   `);
+
+  // Les rôles d'administration ne sont PAS tronqués : le rôle système est
+  // amorcé par migration et sert de rattachement par défaut à `createAdmin`.
+  // Seuls les rôles créés par les tests sont effacés — les comptes qui les
+  // portaient viennent de disparaître, aucune contrainte ne s'y oppose.
+  await prisma.roleAdmin.deleteMany({ where: { systeme: false } });
+}
+
+/** Rôle système, amorcé à la volée si la migration ne l'a pas laissé en place. */
+async function roleSystemeId(): Promise<string> {
+  const role = await prisma.roleAdmin.upsert({
+    where: { nom: "Super administrateur" },
+    update: {},
+    create: { nom: "Super administrateur", permissions: [], systeme: true },
+  });
+  return role.id;
 }
 
 export interface TestJeune {
@@ -177,18 +193,52 @@ export async function createEntreprise(
   };
 }
 
-export async function createAdmin(app: Express): Promise<{ accessToken: string }> {
-  const email = `admin.${Date.now()}@test.ma`;
-  await prisma.user.create({
+export interface TestAdmin {
+  userId: string;
+  email: string;
+  accessToken: string;
+  /** Rôle attribué — le rôle système, sauf si `permissions` a été fourni. */
+  roleAdminId: string;
+}
+
+/**
+ * Compte d'administration.
+ *
+ * Rattaché par défaut au rôle SYSTÈME, qui détient tout le catalogue : sans
+ * rôle un admin n'a aucune permission et toutes les routes du back-office lui
+ * seraient refusées.
+ *
+ * `permissions` crée au contraire un rôle dédié, restreint — c'est ainsi qu'on
+ * vérifie qu'un garde `requirePermission` refuse bien ce qu'il doit refuser.
+ */
+export async function createAdmin(
+  app: Express,
+  overrides: { nom?: string; permissions?: string[] } = {},
+): Promise<TestAdmin> {
+  const email = `admin.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@test.ma`;
+
+  const roleAdminId =
+    overrides.permissions === undefined
+      ? await roleSystemeId()
+      : (
+          await prisma.roleAdmin.create({
+            data: { nom: `Role ${email}`, permissions: overrides.permissions },
+          })
+        ).id;
+
+  const user = await prisma.user.create({
     data: {
       email,
+      nom: overrides.nom ?? "Admin Test",
       passwordHash: await hash(VALID_PASSWORD),
       role: Role.ADMIN,
       emailVerified: true,
       emailVerifiedAt: new Date(),
+      roleAdminId,
     },
   });
-  return { accessToken: await loginAs(app, email) };
+
+  return { userId: user.id, email, roleAdminId, accessToken: await loginAs(app, email) };
 }
 
 /** Date `YYYY-MM-DD` dans N jours — pour les dates limites d'offres. */

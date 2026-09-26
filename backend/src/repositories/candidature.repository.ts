@@ -9,6 +9,11 @@ const fullInclude = {
       type: true,
       ville: true,
       mode: true,
+      niveauDemande: true,
+      filiere: { select: { nom: true } },
+      competences: true,
+      description: true,
+      nombrePostes: true,
       dateLimite: true,
       status: true,
       entrepriseId: true,
@@ -43,6 +48,20 @@ const fullInclude = {
     },
   },
   cv: { select: { id: true, filename: true, mimeType: true, size: true } },
+  /*
+   * Le DERNIER entretien proposé sur cette candidature, et son statut.
+   *
+   * Le statut `entretien` de la candidature dit seulement « on en est à
+   * l'entretien » : il ne bouge ni quand le candidat accepte, ni quand il
+   * refuse, ni quand l'entreprise annule. Sans ce complément, l'écran
+   * réclamait une réponse déjà donnée. Une ligne au plus.
+   */
+  entretiens: {
+    where: { spontanee: false },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+    take: 1,
+  },
 } satisfies Prisma.CandidatureInclude;
 
 export type CandidatureFull = Prisma.CandidatureGetPayload<{ include: typeof fullInclude }>;

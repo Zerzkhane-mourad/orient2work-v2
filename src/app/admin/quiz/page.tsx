@@ -32,6 +32,7 @@ import {
   TR,
 } from "@/components/ui";
 import { TableEmpty, TableSkeleton } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiTest } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -42,6 +43,10 @@ const PER_PAGE = 20;
 const COLUMNS = 5;
 
 export default function AdminTestsPage() {
+  // Les tests restent consultables avec `tests:read` ; activer, désactiver et
+  // supprimer sont des écritures et disparaissent sans elles.
+  const peutEcrire = useCan("tests:write");
+
   const [deleting, setDeleting] = useState<ApiTest | null>(null);
 
   const { perPage, setPerPage } = usePageSize({ defaultSize: PER_PAGE, storageKey: "admin-tests" });
@@ -81,9 +86,11 @@ export default function AdminTestsPage() {
         title="Tests de validation"
         subtitle={`Un test par filière — réussite à partir de ${QUIZ_PASS_SCORE}%.`}
         actions={
-          <ButtonLink href="/admin/quiz/nouvelle" variant="secondary">
-            <Icon name="add" className="text-[18px]" /> Nouveau test
-          </ButtonLink>
+          peutEcrire && (
+            <ButtonLink href="/admin/quiz/nouvelle" variant="secondary">
+              <Icon name="add" className="text-[18px]" /> Nouveau test
+            </ButtonLink>
+          )
         }
       />
 
@@ -175,32 +182,36 @@ export default function AdminTestsPage() {
                           >
                             <Icon name="chevron_right" className="text-[18px]" />
                           </Link>
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => void basculerActive(test)}
-                            aria-label={test.active ? "Désactiver" : "Réactiver"}
-                            title={test.active ? "Désactiver" : "Réactiver"}
-                            className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
-                          >
-                            <Icon
-                              name={test.active ? "visibility_off" : "visibility"}
-                              className="text-[18px]"
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => {
-                              supprimer.reset();
-                              setDeleting(test);
-                            }}
-                            aria-label="Supprimer le test"
-                            title="Supprimer"
-                            className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
-                          >
-                            <Icon name="delete" className="text-[18px]" />
-                          </button>
+                          {peutEcrire && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => void basculerActive(test)}
+                                aria-label={test.active ? "Désactiver" : "Réactiver"}
+                                title={test.active ? "Désactiver" : "Réactiver"}
+                                className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
+                              >
+                                <Icon
+                                  name={test.active ? "visibility_off" : "visibility"}
+                                  className="text-[18px]"
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => {
+                                  supprimer.reset();
+                                  setDeleting(test);
+                                }}
+                                aria-label="Supprimer le test"
+                                title="Supprimer"
+                                className="rounded-full p-2 text-error hover:bg-error-container disabled:opacity-40"
+                              >
+                                <Icon name="delete" className="text-[18px]" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </TD>
                     </TR>

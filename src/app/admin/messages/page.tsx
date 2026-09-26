@@ -14,6 +14,7 @@ import {
   SkeletonList,
 } from "@/components/ui";
 import { AdminToolbar, FiltrePastilles, Pagination } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import { formatRelative } from "@/lib/api/adapters";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -29,6 +30,10 @@ const TABS = [
 ] as const;
 
 export default function AdminMessagesPage() {
+  // La lecture des messages suffit à `messages:read` ; marquer « traité » est
+  // une écriture, et le bouton disparaît sans elle.
+  const peutEcrire = useCan("messages:write");
+
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("a-traiter");
 
   const traite = TABS.find((t) => t.key === tab)?.traite;
@@ -110,18 +115,20 @@ export default function AdminMessagesPage() {
                         · {formatRelative(m.createdAt)}
                       </p>
                     </div>
-                    <Button
-                      variant={m.traite ? "ghost" : "secondary"}
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => {
-                        void setTraite(m.id, !m.traite).then((updated) => {
-                          if (updated) refetch();
-                        });
-                      }}
-                    >
-                      {m.traite ? "Rouvrir" : "Marquer comme traité"}
-                    </Button>
+                    {peutEcrire && (
+                      <Button
+                        variant={m.traite ? "ghost" : "secondary"}
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => {
+                          void setTraite(m.id, !m.traite).then((updated) => {
+                            if (updated) refetch();
+                          });
+                        }}
+                      >
+                        {m.traite ? "Rouvrir" : "Marquer comme traité"}
+                      </Button>
+                    )}
                   </div>
 
                   {/* Contenu assaini côté serveur avant persistance : aucun HTML

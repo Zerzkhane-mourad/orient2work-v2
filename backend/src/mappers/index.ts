@@ -7,6 +7,8 @@
  * contrôleur ne renvoie JAMAIS une entité Prisma brute.
  */
 export * from "./user.mapper.js";
+export * from "./role-admin.mapper.js";
+export * from "./utilisateur.mapper.js";
 export * from "./jeune.mapper.js";
 export * from "./entreprise.mapper.js";
 export * from "./offre.mapper.js";

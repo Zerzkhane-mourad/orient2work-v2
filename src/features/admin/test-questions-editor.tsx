@@ -24,6 +24,7 @@ import {
   Icon,
   Modal,
 } from "@/components/ui";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiQuizQuestion, ApiTest } from "@/lib/api/types";
 import { useMutation } from "@/lib/api/use-api";
@@ -43,6 +44,10 @@ export function TestQuestionsEditor({
   /** Remonte le test rechargé après chaque opération. */
   onChange: (test: ApiTest) => void;
 }) {
+  // Les énoncés et le corrigé restent lisibles avec `tests:read` ; seules les
+  // retouches de questions demandent l'écriture.
+  const peutEcrire = useCan("tests:write");
+
   const questions = test.questions ?? [];
 
   const [editing, setEditing] = useState<ApiQuizQuestion | null>(null);
@@ -125,9 +130,11 @@ export function TestQuestionsEditor({
             {questions.length}
           </span>
         </CardTitle>
-        <Button variant="secondary" size="sm" onClick={ouvrirCreation} disabled={pending}>
-          <Icon name="add" className="text-[18px]" /> Ajouter une question
-        </Button>
+        {peutEcrire && (
+          <Button variant="secondary" size="sm" onClick={ouvrirCreation} disabled={pending}>
+            <Icon name="add" className="text-[18px]" /> Ajouter une question
+          </Button>
+        )}
       </CardHeader>
 
       <CardBody className="space-y-4">
@@ -174,6 +181,7 @@ export function TestQuestionsEditor({
                   </div>
                 </div>
 
+                {peutEcrire && (
                 <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
@@ -220,6 +228,7 @@ export function TestQuestionsEditor({
                     <Icon name="delete" className="text-[18px]" />
                   </button>
                 </div>
+                )}
               </li>
             ))}
           </ul>

@@ -155,7 +155,9 @@ export function CarteATraiter({ files, loading }: { files: FileAttente[]; loadin
           ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)
           : files.map((f) => (
               <Link
-                key={f.href}
+                // Le libellé, et non la cible : rien n'interdit à deux files de
+                // mener au même écran, et `href` ne les distinguerait pas.
+                key={f.libelle}
                 href={f.href}
                 className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-container-low"
               >

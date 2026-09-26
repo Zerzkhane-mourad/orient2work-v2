@@ -7,6 +7,7 @@ import {
   Card,
   CardBody,
   Icon,
+  type IconName,
   ProgressBar,
   Skeleton,
   SkeletonCard,
@@ -77,26 +78,59 @@ export default function MesFormationsPage() {
         Dégradé `inverse-surface → primary` : `primary-container` valant la même
         couleur que `primary`, l'ancien dégradé était un aplat.
       */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-inverse-surface to-primary text-white">
-        <CardBody className="space-y-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <h1 className="font-headline text-2xl font-bold">Mes formations</h1>
-              <p className="max-w-md text-sm text-white/70">
-                Chaque formation validée rapporte {POINTS_FORMATION_VALIDEE} points de score
-                d&apos;employabilité, et rend votre profil plus visible auprès des recruteurs.
+      {/*
+        Même bandeau que les offres et la candidature spontanée : les écrans de
+        l'espace jeune se reconnaissent d'un coup d'œil. `primary-container`
+        reste profond dans tous les thèmes — le dégradé vers `primary`
+        virait au bleu pâle en thème sombre, sous un texte blanc.
+      */}
+      <section className="relative overflow-hidden rounded-2xl bg-primary-container px-5 py-6 text-white shadow-level-1 sm:px-8 sm:py-8">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-secondary-container/20 blur-3xl"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -bottom-24 left-1/4 h-48 w-48 rounded-full bg-white/10 blur-3xl"
+        />
+        <Icon
+          name="school"
+          className="pointer-events-none absolute -bottom-6 right-6 hidden text-[140px] text-white/[0.05] sm:block"
+        />
+
+        <div className="relative space-y-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-secondary-fixed-dim">
+                <Icon name="school" className="text-[16px]" /> Formations
+              </p>
+              <h1 className="text-balance font-headline text-2xl font-bold leading-tight sm:text-3xl">
+                Mes formations
+              </h1>
+              <p className="max-w-lg text-sm leading-relaxed text-white/80 sm:text-base">
+                Chaque formation validée rapporte{" "}
+                <span className="font-semibold text-secondary-fixed-dim">
+                  {POINTS_FORMATION_VALIDEE} points
+                </span>{" "}
+                de score d&apos;employabilité, et rend votre profil plus visible auprès des
+                recruteurs.
               </p>
             </div>
 
-            <div className="shrink-0 rounded-xl bg-white/10 p-4 backdrop-blur sm:min-w-56">
-              <div className="flex items-baseline justify-between gap-3 text-xs">
-                <span className="text-white/80">Score d&apos;employabilité</span>
-                <span className="font-bold text-secondary-fixed-dim">{score}/100</span>
+            <div className="shrink-0 rounded-xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur lg:min-w-64">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/80">
+                  Score d&apos;employabilité
+                </span>
+                <span className="font-headline text-xl font-bold text-secondary-fixed-dim">
+                  {score}
+                  <span className="text-sm text-white/60">/100</span>
+                </span>
               </div>
-              <ProgressBar value={score} className="mt-1.5 bg-white/20" />
+              <ProgressBar value={score} className="mt-2 h-2 bg-white/15" />
               {pointsFormations && (
                 <p className="mt-2 text-xs text-white/70">
-                  Formations : {pointsFormations.points}/{pointsFormations.max} pts
+                  dont formations : {pointsFormations.points}/{pointsFormations.max} pts
                 </p>
               )}
             </div>
@@ -104,22 +138,26 @@ export default function MesFormationsPage() {
 
           {/* Trois chiffres, pas quatre : « suivies » était la somme des deux
               autres et n'apprenait rien de plus. */}
-          <div className="grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5">
-            <Chiffre valeur={totalEnCours} label="En cours" />
-            <Chiffre valeur={lues} label="Terminées" />
-            <Chiffre valeur={validees} label="Certificats" objectif={FORMATIONS_OBJECTIF} accent />
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <Chiffre valeur={totalEnCours} label="En cours" icon="play_arrow" ton="encours" />
+            <Chiffre valeur={lues} label="Terminées" icon="check_circle" ton="termine" />
+            <Chiffre
+              valeur={validees}
+              label="Certificats"
+              objectif={FORMATIONS_OBJECTIF}
+              icon="workspace_premium"
+              ton="acquis"
+            />
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </section>
 
       {/* ── Reprendre ──────────────────────────────────────────────────── */}
       <section className="space-y-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-headline text-lg font-bold text-primary">
-            Continuer l&apos;apprentissage
-          </h2>
+        <div className="flex items-center justify-between gap-3">
+          <TitreSection icon="play_arrow" titre="Continuer l'apprentissage" />
           {totalEnCours > enCours.length && (
-            <span className="text-sm text-on-surface-variant">
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
               {totalEnCours} au total
             </span>
           )}
@@ -135,9 +173,9 @@ export default function MesFormationsPage() {
           /* Section conservée même vide : elle disparaissait entièrement, si
              bien qu'un nouvel arrivant n'avait aucune idée de ce qui viendrait
              s'y afficher. */
-          <Card>
+          <Card className="border-dashed">
             <CardBody className="flex flex-col items-center gap-3 py-8 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-container text-on-surface-variant">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Icon name="auto_stories" />
               </span>
               <p className="text-sm text-on-surface-variant">
@@ -189,9 +227,9 @@ export default function MesFormationsPage() {
 
       {/* ── Catalogue ──────────────────────────────────────────────────── */}
       <section className="space-y-4">
-        <div>
-          <h2 className="font-headline text-lg font-bold text-primary">Catalogue de formations</h2>
-          <p className="text-sm text-on-surface-variant">
+        <div className="space-y-1">
+          <TitreSection icon="menu_book" titre="Catalogue de formations" />
+          <p className="pl-11 text-sm text-on-surface-variant">
             Formations communes et de spécialité selon votre filière.
           </p>
         </div>
@@ -211,33 +249,66 @@ export default function MesFormationsPage() {
 
 /* ── Blocs ────────────────────────────────────────────────────────────── */
 
+/**
+ * Trois états, trois teintes — les mêmes que dans le reste de l'écran : bleu
+ * clair pour ce qui est EN COURS (les cartes de reprise), vert pour ce qui est
+ * TERMINÉ (la barre pleine des cartes), or pour ce qui est ACQUIS (la carte
+ * certificats).
+ */
+const TON_CHIFFRE = {
+  encours: "bg-primary-fixed text-primary",
+  termine: "bg-success text-white",
+  acquis: "bg-secondary-container text-on-secondary-container",
+} as const;
+
 function Chiffre({
   valeur,
   label,
   objectif,
-  accent,
+  icon,
+  ton,
 }: {
   valeur: number;
   label: string;
   objectif?: number;
-  /** Or : réservé à ce qui est ACQUIS, cohérent avec la carte certificats. */
-  accent?: boolean;
+  icon: IconName;
+  ton: keyof typeof TON_CHIFFRE;
 }) {
   return (
-    <div className="px-3 py-3 text-center">
-      <p
+    <div className="flex flex-col items-center gap-2 rounded-xl bg-white/[0.07] px-2 py-3 ring-1 ring-white/10 sm:flex-row sm:gap-3 sm:px-4">
+      <span
         className={cn(
-          "font-headline text-2xl font-bold leading-tight",
-          accent && "text-secondary-fixed-dim",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10",
+          TON_CHIFFRE[ton],
         )}
       >
-        {valeur}
-        {/* `/60` et non `/50` : à 50 % le rapport tombait à 4,53:1 sur le point
-            clair du dégradé, sans marge sous le minimum AA. */}
-        {objectif !== undefined && <span className="text-base text-white/60">/{objectif}</span>}
-      </p>
-      <p className="text-xs text-white/70">{label}</p>
+        <Icon name={icon} className="text-[20px]" />
+      </span>
+      <div className="text-center sm:text-left">
+        <p
+          className={cn(
+            "font-headline text-2xl font-bold leading-tight",
+            ton === "acquis" && "text-secondary-fixed-dim",
+          )}
+        >
+          {valeur}
+          {objectif !== undefined && <span className="text-base text-white/60">/{objectif}</span>}
+        </p>
+        <p className="text-xs text-white/75">{label}</p>
+      </div>
     </div>
+  );
+}
+
+/** Titre de section précédé de sa tuile d'icône — repère de lecture en défilant. */
+function TitreSection({ icon, titre }: { icon: IconName; titre: string }) {
+  return (
+    <h2 className="flex items-center gap-3 font-headline text-lg font-bold text-primary">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Icon name={icon} className="text-[18px]" />
+      </span>
+      {titre}
+    </h2>
   );
 }
 
@@ -259,7 +330,7 @@ function CarteReprise({ formation }: { formation: ApiFormationSummary }) {
       juste en dessous. `primary-fixed` porte le texte `primary` à 12,8:1 et
       les méta à 7,2:1 — largement au-dessus du minimum.
     */
-    <Card className="overflow-hidden border-0 bg-primary-fixed transition-shadow hover:shadow-level-2">
+    <Card className="group overflow-hidden border-0 bg-primary-fixed transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-level-2">
       <ButtonLink
         href={`/espace-jeune/formations/${formation.id}`}
         variant="ghost"
@@ -277,8 +348,10 @@ function CarteReprise({ formation }: { formation: ApiFormationSummary }) {
           ) : (
             <Icon name="auto_stories" className="text-3xl text-white/80" />
           )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-            <Icon name="play_arrow" filled className="text-3xl text-white" />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors duration-200 group-hover:bg-black/35">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container shadow-level-1 transition-transform duration-200 group-hover:scale-110">
+              <Icon name="play_arrow" filled className="text-2xl" />
+            </span>
           </span>
         </span>
 
@@ -292,7 +365,7 @@ function CarteReprise({ formation }: { formation: ApiFormationSummary }) {
           {/* Rail assombri : la piste `surface-variant` par défaut se confondait
               avec le fond teinté de la carte, la barre semblait pleine. */}
           <ProgressBar value={formation.progression} className="h-1.5 bg-primary/15" />
-          <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+          <span className="flex items-center gap-1 text-xs font-bold text-primary transition-[gap] duration-200 group-hover:gap-2">
             Reprendre <Icon name="arrow_forward" className="text-[14px]" />
           </span>
         </span>

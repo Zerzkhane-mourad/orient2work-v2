@@ -11,7 +11,7 @@
  * puis-je encore me retirer.
  */
 import type { IconName } from "@/components/ui/icon";
-import type { ApiCandidature, CandidatureStatus } from "@/lib/api/types";
+import type { ApiCandidature, CandidatureStatus, EntretienStatus } from "@/lib/api/types";
 
 export interface ActionSuivi {
   libelle: string;
@@ -80,9 +80,63 @@ export interface Suivi {
   retirable: boolean;
 }
 
+/**
+ * Ce que montre une candidature au stade `entretien` une fois l'invitation
+ * TRANCHÉE.
+ *
+ * Le statut de la candidature ne bouge ni à l'acceptation, ni au refus, ni à
+ * l'annulation : sans cette table, « Entretien proposé — Répondre à
+ * l'invitation » restait affiché, en or et en urgence, sur une invitation déjà
+ * acceptée. Tant que la réponse est attendue (`en_attente`), rien ne change.
+ */
+export interface EtatEntretien {
+  libelle: string;
+  ton: "success" | "neutral";
+  icon: IconName;
+  /** Classe du liseré de carte. */
+  lisere: string;
+  action: ActionSuivi | null;
+}
+
+const APRES_REPONSE: Partial<Record<EntretienStatus, EtatEntretien>> = {
+  accepte: {
+    libelle: "Entretien confirmé",
+    ton: "success",
+    icon: "event_available",
+    lisere: "bg-primary",
+    action: {
+      libelle: "Voir mon entretien",
+      href: "/espace-jeune/entretiens",
+      icon: "event_available",
+      urgent: false,
+    },
+  },
+  refuse: {
+    libelle: "Entretien décliné",
+    ton: "neutral",
+    icon: "event_busy",
+    lisere: "bg-outline",
+    action: null,
+  },
+  annule: {
+    libelle: "Entretien annulé",
+    ton: "neutral",
+    icon: "event_busy",
+    lisere: "bg-outline",
+    action: null,
+  },
+};
+
+/** L'état post-réponse, ou `null` quand le statut de candidature suffit. */
+export function etatEntretien(candidature: ApiCandidature): EtatEntretien | null {
+  if (candidature.status !== "entretien" || !candidature.entretienStatus) return null;
+  return APRES_REPONSE[candidature.entretienStatus] ?? null;
+}
+
 export function suivi(candidature: ApiCandidature, maintenant: Date = new Date()): Suivi {
+  const apresReponse = etatEntretien(candidature);
   return {
-    action: ACTIONS[candidature.status],
+    action: apresReponse ? apresReponse.action : ACTIONS[candidature.status],
     signal: signalDe(candidature, maintenant),
     retirable: OUVERTS[candidature.status],
   };

@@ -19,5 +19,15 @@ export const ENTREPRISE_THEMES: readonly EntrepriseTheme[] = [
 
 export const DEFAULT_ENTREPRISE_THEME: EntrepriseThemeId = "marine";
 
+/**
+ * Palette calculée depuis les couleurs du logo plutôt que choisie.
+ *
+ * Absente d'`ENTREPRISE_THEMES` : ce tableau décrit les préréglages livrés,
+ * dont l'aperçu est une constante. L'aperçu du thème automatique dépend, lui,
+ * du logo de l'entreprise — il est calculé à l'affichage par
+ * `apercuDepuisCouleur`.
+ */
+export const THEME_AUTO: EntrepriseThemeId = "auto";
+
 /** Attribut posé sur `<html>` — et non sur la coquille, pour que les modales en portail suivent. */
 export const THEME_ATTRIBUTE = "data-theme-entreprise";

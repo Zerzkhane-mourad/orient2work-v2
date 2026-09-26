@@ -11,8 +11,16 @@
  * Le tout part en BLOC : la liste envoyée remplace les journées à venir. Un
  * envoi différentiel obligerait à distinguer « journée retirée » de « journée
  * non modifiée ».
+ *
+ * ── Ce qui se perdait en silence ────────────────────────────────────────────
+ *
+ * Rien n'est écrit tant qu'« Enregistrer » n'est pas pressé — et rien ne le
+ * disait. Programmer un mois entier puis revenir à l'agenda, fermer l'onglet ou
+ * recharger effaçait tout le travail sans un mot. L'écran signale désormais ses
+ * modifications en attente, les défend au déchargement de la page, et les rend
+ * annulables.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -25,13 +33,48 @@ import {
 } from "@/components/ui";
 import { anomalieDate, CalendrierDisponibilites } from "./calendrier-disponibilites";
 import { api } from "@/lib/api";
-import type { ApiDateProgrammee } from "@/lib/api/types";
+import type { ApiDateProgrammee, ApiDisponibilites } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
+import { cn } from "@/lib/utils";
 
 const DUREES = [15, 30, 45, 60, 90, 120];
 const HORIZONS = [1, 2, 4, 6, 8, 12];
 
-export function DisponibilitesEditor() {
+/**
+ * Empreinte d'un jeu de réglages.
+ *
+ * Comparer les objets ne dirait rien — `dates` est recréé à chaque retouche du
+ * calendrier. C'est le CONTENU qui décide s'il y a une modification en attente.
+ */
+function empreinte(reglages: {
+  spontaneeOuverte: boolean;
+  creneauDureeMin: number;
+  reservationSemaines: number;
+  spontaneeMessage: string;
+  dates: ApiDateProgrammee[];
+}): string {
+  return JSON.stringify({
+    ...reglages,
+    dates: [...reglages.dates]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((jour) => ({
+        date: jour.date,
+        plages: [...jour.plages]
+          .sort((a, b) => a.debut.localeCompare(b.debut))
+          .map((plage) => `${plage.debut}-${plage.fin}`),
+      })),
+  });
+}
+
+interface DisponibilitesEditorProps {
+  /**
+   * Prévient l'écran porteur qu'il reste des modifications non enregistrées —
+   * à lui de défendre le changement d'onglet, que ce composant ne voit pas.
+   */
+  onModificationsChange?: (modifie: boolean) => void;
+}
+
+export function DisponibilitesEditor({ onModificationsChange }: DisponibilitesEditorProps) {
   const { data, loading, error, refetch } = useApi(() => api.disponibilites.get(), []);
   const enregistrer = useMutation(api.disponibilites.update);
 
@@ -42,14 +85,54 @@ export function DisponibilitesEditor() {
   const [dates, setDates] = useState<ApiDateProgrammee[]>([]);
   const [enregistre, setEnregistre] = useState(false);
 
+  /** Remet l'écran sur ce que le serveur a renvoyé — au chargement, ou sur annulation. */
+  const reprendre = useCallback((reglages: ApiDisponibilites) => {
+    setOuverte(reglages.spontaneeOuverte);
+    setDuree(reglages.creneauDureeMin);
+    setSemaines(reglages.reservationSemaines);
+    setMessage(reglages.spontaneeMessage);
+    setDates(reglages.dates ?? []);
+  }, []);
+
   useEffect(() => {
-    if (!data) return;
-    setOuverte(data.spontaneeOuverte);
-    setDuree(data.creneauDureeMin);
-    setSemaines(data.reservationSemaines);
-    setMessage(data.spontaneeMessage);
-    setDates(data.dates ?? []);
-  }, [data]);
+    if (data) reprendre(data);
+  }, [data, reprendre]);
+
+  const modifie = useMemo(() => {
+    if (!data) return false;
+    return (
+      empreinte({
+        spontaneeOuverte: ouverte,
+        creneauDureeMin: duree,
+        reservationSemaines: semaines,
+        spontaneeMessage: message,
+        dates,
+      }) !==
+      empreinte({
+        spontaneeOuverte: data.spontaneeOuverte,
+        creneauDureeMin: data.creneauDureeMin,
+        reservationSemaines: data.reservationSemaines,
+        spontaneeMessage: data.spontaneeMessage,
+        dates: data.dates ?? [],
+      })
+    );
+  }, [data, ouverte, duree, semaines, message, dates]);
+
+  useEffect(() => {
+    onModificationsChange?.(modifie);
+  }, [modifie, onModificationsChange]);
+
+  /*
+   * Dernier rempart : fermeture de l'onglet, rechargement, lien externe. Le
+   * navigateur impose son propre libellé — `preventDefault` suffit à déclencher
+   * la demande de confirmation.
+   */
+  useEffect(() => {
+    if (!modifie) return;
+    const defendre = (evenement: BeforeUnloadEvent) => evenement.preventDefault();
+    window.addEventListener("beforeunload", defendre);
+    return () => window.removeEventListener("beforeunload", defendre);
+  }, [modifie]);
 
   /*
    * Contrôlées contre la durée COURANTE : passer de 15 à 60 minutes rend
@@ -164,20 +247,65 @@ export function DisponibilitesEditor() {
         />
 
         {enregistrer.error && <ErrorBanner error={enregistrer.error} />}
-        {enregistre && !enregistrer.error && (
+        {/* Le succès ne vaut que pour l'état enregistré : dès la retouche
+            suivante, « Disponibilités enregistrées » deviendrait un mensonge. */}
+        {enregistre && !modifie && !enregistrer.error && (
           <SuccessBanner message="Disponibilités enregistrées." />
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
+        {/*
+          Barre d'action collante : le calendrier et le récapitulatif des
+          journées font plusieurs écrans de haut. Un bouton « Enregistrer » en
+          pied de carte se retrouvait hors de vue au moment précis où l'on
+          venait de programmer une date.
+        */}
+        <div
+          className={cn(
+            // `-mx-6 px-6` : la barre s'étend d'un bord à l'autre de la carte,
+            // dont `CardBody` retranche 24px de chaque côté.
+            "sticky bottom-0 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3",
+            modifie
+              ? "border-secondary bg-secondary-container"
+              : "border-transparent bg-surface-container-lowest",
+          )}
+        >
+          <p className="min-w-0 flex-1 text-xs">
+            {modifie ? (
+              <span className="flex items-center gap-1.5 font-semibold text-on-secondary-container">
+                <Icon name="warning" className="text-[15px]" />
+                Modifications non enregistrées — vos créneaux n&apos;ont pas encore changé.
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-on-surface-variant">
+                <Icon name={ouverte ? "check_circle" : "visibility_off"} className="text-[15px]" />
+                {ouverte
+                  ? "Vos créneaux sont visibles par les candidats validés."
+                  : "Vos créneaux ne sont visibles par personne."}
+              </span>
+            )}
+          </p>
+
+          {modifie && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={enregistrer.pending}
+              onClick={() => data && reprendre(data)}
+            >
+              Annuler
+            </Button>
+          )}
+
           <Button
             variant="secondary"
             onClick={() => void soumettre()}
-            disabled={fautives > 0 || enregistrer.pending}
+            disabled={fautives > 0 || enregistrer.pending || !modifie}
           >
             {enregistrer.pending ? "Enregistrement…" : "Enregistrer"}
           </Button>
+
           {fautives > 0 && (
-            <span className="text-xs text-error">
+            <span className="w-full text-xs font-semibold text-error">
               Corrigez {fautives} journée{fautives > 1 ? "s" : ""} avant d&apos;enregistrer.
             </span>
           )}

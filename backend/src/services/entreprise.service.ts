@@ -1,6 +1,6 @@
 /** Profil entreprise et modération par l'admin (§7.2). */
 import { EntrepriseStatus } from "@prisma/client";
-import { NotFoundError } from "../lib/errors.js";
+import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { buildMeta, toSkipTake } from "../lib/pagination.js";
 import { stripTags } from "../lib/sanitize.js";
 import { assertOwnership, isAdmin, type Actor } from "../middlewares/authorize.js";
@@ -13,6 +13,7 @@ import {
 } from "../mappers/entreprise.mapper.js";
 import { notify } from "./notification.service.js";
 import type { ApiMeta } from "../lib/http.js";
+import { ENTREPRISE_THEME_AUTO } from "../validators/entreprise.validator.js";
 import type {
   ListEntreprisesInput,
   UpdateEntrepriseInput,
@@ -50,6 +51,24 @@ export async function updateProfile(
   const entreprise = await repository.findEntrepriseById(id);
   if (!entreprise) throw new NotFoundError("Entreprise introuvable.");
   assertOwnership(actor, entreprise.id);
+
+  /*
+   * Le thème « auto » se calcule à partir de la couleur du logo : sans couleur,
+   * il ne décrit aucune palette et l'espace retomberait silencieusement sur la
+   * palette de base — un réglage qui s'affiche comme actif sans rien changer.
+   *
+   * La couleur peut venir du même appel (logo remplacé, thème basculé d'un
+   * coup) ou être déjà enregistrée ; c'est pourquoi ce contrôle vit ici et non
+   * dans le schéma, qui ne voit que le corps de la requête.
+   */
+  if (input.theme === ENTREPRISE_THEME_AUTO) {
+    const couleur = input.themeCouleur ?? entreprise.themeCouleur;
+    if (!couleur) {
+      throw new ValidationError("Aucune couleur n'a été relevée dans votre logo.", [
+        { field: "theme", message: "le thème automatique demande un logo en couleur" },
+      ]);
+    }
+  }
 
   const updated = await repository.updateEntreprise(id, {
     ...input,

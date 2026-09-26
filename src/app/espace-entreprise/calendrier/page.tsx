@@ -11,7 +11,7 @@
  *
  * Ils sont désormais séparés en deux onglets : on choisit ce qu'on vient faire.
  */
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import {
   Button,
   ButtonLink,
@@ -28,6 +28,7 @@ import { DisponibilitesEditor } from "@/features/entreprise/disponibilites-edito
 import { api } from "@/lib/api";
 import { API_MAX_PER_PAGE, type ApiEntretien } from "@/lib/api/types";
 import { useApi } from "@/lib/api/use-api";
+import { useEcrireParams, useParam } from "@/lib/use-url-param";
 import { cn, formatDate } from "@/lib/utils";
 
 const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -50,8 +51,51 @@ function moisAffiche(offset: number): { debut: string; fin: string } {
   return { debut: dayKey(premier), fin: dayKey(dernier) };
 }
 
+/**
+ * L'onglet vit dans l'URL (`?vue=disponibilites`).
+ *
+ * Un état local rendait le réglage des disponibilités INATTEIGNABLE par lien :
+ * la notification « ouvrez des créneaux », le tableau de bord et l'écran des
+ * entretiens ne pouvaient renvoyer que vers l'agenda, à charge pour le
+ * destinataire de trouver le second onglet. Le retour arrière quittait par
+ * ailleurs la page au lieu de revenir à l'onglet précédent.
+ *
+ * Lire l'URL impose la frontière de suspense, sans quoi la page bascule en
+ * rendu dynamique.
+ */
 export default function CalendrierPage() {
-  const [onglet, setOnglet] = useState<Onglet>("agenda");
+  return (
+    <Suspense fallback={<SkeletonList count={2} />}>
+      <Contenu />
+    </Suspense>
+  );
+}
+
+function Contenu() {
+  const ecrire = useEcrireParams();
+  const onglet: Onglet = useParam("vue") === "disponibilites" ? "disponibilites" : "agenda";
+
+  /** Modifications en attente dans l'éditeur, qu'un changement d'onglet perdrait. */
+  const [modifsEnAttente, setModifsEnAttente] = useState(false);
+
+  // Changer d'onglet est un geste délibéré : il mérite son entrée d'historique.
+  // Quitter les disponibilités démonte l'éditeur — et avec lui tout ce qui n'a
+  // pas été enregistré. On le demande avant, plutôt que de l'effacer après.
+  const setOnglet = (vue: Onglet) => {
+    if (
+      vue !== onglet &&
+      onglet === "disponibilites" &&
+      modifsEnAttente &&
+      !window.confirm(
+        "Vos modifications de disponibilités ne sont pas enregistrées. Quitter cet onglet les abandonnera.",
+      )
+    ) {
+      return;
+    }
+    if (vue !== "disponibilites") setModifsEnAttente(false);
+    ecrire({ vue: vue === "agenda" ? undefined : vue }, { push: true });
+  };
+
   const [monthOffset, setMonthOffset] = useState(0);
   /** Jour retenu dans la grille ; `null` = vue « prochains entretiens ». */
   const [jourChoisi, setJourChoisi] = useState<string | null>(null);
@@ -151,6 +195,9 @@ export default function CalendrierPage() {
           actif={onglet === "disponibilites"}
           onClick={() => setOnglet("disponibilites")}
           icone="schedule"
+          // Le point survit au changement d'onglet : c'est justement dans l'autre
+          // vue qu'il faut se souvenir d'un enregistrement en suspens.
+          point={modifsEnAttente}
         >
           Mes disponibilités
         </Onglet>
@@ -337,25 +384,69 @@ export default function CalendrierPage() {
               offre. Les rendez-vous pris apparaissent dans l&apos;agenda.
             </p>
           </div>
-          <DisponibilitesEditor />
+
+          {/* Le réglage des créneaux et le traitement des demandes qu'ils
+              produisent sont deux écrans distincts : sans ce renvoi, on ouvre
+              des disponibilités sans jamais voir ce qu'elles ont rapporté. */}
+          <DemandesATraiter />
+
+          <DisponibilitesEditor onModificationsChange={setModifsEnAttente} />
         </section>
       )}
     </div>
   );
 }
 
-/** Onglet de navigation, avec compteur facultatif. */
+/** Constante de module : un tableau recréé à chaque rendu boucle la requête. */
+const SPONTANEES_EN_ATTENTE = ["en_attente"] as const;
+
+/**
+ * Rappel des demandes spontanées non tranchées, depuis l'écran qui les produit.
+ *
+ * Le créneau réservé reste bloqué chez le candidat tant que l'entreprise n'a
+ * pas répondu : programmer de nouvelles journées sans avoir traité les
+ * précédentes demandes est le contresens que ce bandeau signale.
+ */
+function DemandesATraiter() {
+  const { data, loading } = useApi(
+    () => api.entretiens.list({ status: SPONTANEES_EN_ATTENTE, spontanee: true, perPage: 1 }),
+    [],
+  );
+
+  const total = data?.meta?.total ?? 0;
+  if (loading || total === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-secondary bg-secondary-container px-4 py-3 text-sm text-on-secondary-container">
+      <Icon name="handshake" className="text-[20px]" />
+      <span className="flex-1">
+        <strong className="font-bold">
+          {total} candidature{total > 1 ? "s" : ""} spontanée{total > 1 ? "s" : ""}
+        </strong>{" "}
+        {total > 1 ? "attendent" : "attend"} votre réponse.
+      </span>
+      <ButtonLink href="/espace-entreprise/entretiens" variant="secondary" size="sm">
+        Les traiter
+      </ButtonLink>
+    </div>
+  );
+}
+
+/** Onglet de navigation, avec compteur ou pastille d'alerte facultatifs. */
 function Onglet({
   actif,
   onClick,
   icone,
   compte,
+  point,
   children,
 }: {
   actif: boolean;
   onClick: () => void;
   icone: "event" | "schedule";
   compte?: number;
+  /** Pastille sans chiffre : « quelque chose vous attend ici ». */
+  point?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -382,6 +473,15 @@ function Onglet({
         >
           {compte}
         </span>
+      )}
+      {point && (
+        <span
+          className="h-2 w-2 rounded-full bg-secondary"
+          // Une couleur ne s'annonce pas : sans ce libellé, l'onglet ne dit
+          // rien de plus à qui ne voit pas la pastille.
+          aria-label="modifications non enregistrées"
+          role="img"
+        />
       )}
     </button>
   );

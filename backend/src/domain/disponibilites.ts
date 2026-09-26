@@ -39,14 +39,7 @@ export function enHeure(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/**
- * `YYYY-MM-DD` d'une colonne `@db.Date`.
- *
- * Ces colonnes sont écrites à MINUIT UTC (`dateOnlySchema`) et doivent être
- * relues en UTC. Les lire avec les accesseurs locaux ferait reculer la date
- * d'un jour dans tout fuseau négatif — un créneau réservé resterait alors
- * affiché comme libre, et un autre disparaîtrait sans raison.
- */
+
 export function dateIsoUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

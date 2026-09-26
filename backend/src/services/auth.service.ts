@@ -8,11 +8,13 @@
  *    est interprété comme un vol : toutes les sessions du compte sont révoquées ;
  *  • le mot de passe n'est jamais journalisé, ni renvoyé, ni stocké en clair.
  */
-import { Role, TokenPurpose } from "@prisma/client";
+import { DocumentType, Role, TokenPurpose } from "@prisma/client";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { prisma } from "../lib/prisma.js";
 import { ConflictError, ForbiddenError, UnauthenticatedError } from "../lib/errors.js";
+import { assertRealFileType, removeStoredFile, sanitizeFilename } from "../lib/upload.js";
+import { ENTREPRISE_THEME_AUTO } from "../validators/entreprise.validator.js";
 import { burnPasswordComparison, hashPassword, verifyPassword } from "../lib/password.js";
 import { durationToMs, generateOpaqueToken, hashToken, signAccessToken } from "../lib/tokens.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/mailer.js";
@@ -20,6 +22,8 @@ import * as userRepository from "../repositories/user.repository.js";
 import type { UserWithProfiles } from "../repositories/user.repository.js";
 import { toUserDto, type UserDto } from "../mappers/user.mapper.js";
 import { computeProfilCompletion } from "../domain/profil.js";
+import type { Permission } from "../domain/permissions.js";
+import { permissionsOf } from "../middlewares/authorize.js";
 import { assertFiliereId } from "./referentiel.service.js";
 import type {
   ChangePasswordInput,
@@ -45,6 +49,18 @@ function profileIdOf(user: UserWithProfiles): string | null {
   return user.jeune?.id ?? user.entreprise?.id ?? null;
 }
 
+/**
+ * Permissions à embarquer dans le profil de session.
+ *
+ * Seulement pour les administrateurs : personne d'autre n'en a, et une requête
+ * supplémentaire à chaque connexion de jeune serait payée pour rien. Ce tableau
+ * sert au back-office à masquer les écrans inaccessibles ; l'autorisation reste
+ * refaite côté serveur à chaque appel (voir `requirePermission`).
+ */
+async function permissionsFor(user: UserWithProfiles): Promise<Permission[]> {
+  return user.role === Role.ADMIN ? permissionsOf(user.id) : [];
+}
+
 async function issueSession(user: UserWithProfiles, context: SessionContext): Promise<AuthResult> {
   const profileId = profileIdOf(user);
 
@@ -65,7 +81,7 @@ async function issueSession(user: UserWithProfiles, context: SessionContext): Pr
   });
 
   return {
-    user: toUserDto(user, profileId),
+    user: toUserDto(user, profileId, await permissionsFor(user)),
     accessToken,
     refreshToken,
     expiresIn: Math.floor(durationToMs(env.JWT_ACCESS_TTL) / 1000),
@@ -149,11 +165,33 @@ export async function registerJeune(input: RegisterJeuneInput): Promise<{ messag
   return { message: "Inscription enregistrée. Vérifiez votre boîte email." };
 }
 
+/**
+ * Inscription d'une entreprise, logo compris.
+ *
+ * Le logo est obligatoire et voyage avec le formulaire : l'inscription n'ouvre
+ * pas de session, il n'existe donc aucun instant où il pourrait passer par la
+ * route authentifiée `POST /documents/LOGO`. Il est enregistré comme un
+ * `Document` ordinaire, appartenant au compte créé — le profil pointe vers la
+ * route protégée, exactement comme un logo remplacé plus tard depuis l'espace.
+ *
+ * La suppression du fichier en cas d'échec est prise en charge par la route
+ * (`auth.routes.ts`), qui la déclenche pour toute réponse autre qu'un 201. Seul
+ * le cas anti-énumération ci-dessous — un 201 qui ne crée rien — doit faire son
+ * propre ménage.
+ */
 export async function registerEntreprise(
   input: RegisterEntrepriseInput,
+  logo: Express.Multer.File,
 ): Promise<{ message: string }> {
+  // Contrôle du contenu réel avant toute écriture en base : un `.png` qui n'en
+  // est pas un est supprimé du disque par cet appel.
+  await assertRealFileType(logo.path, logo.mimetype);
+
   if (await userRepository.emailExists(input.email)) {
     logger.warn({ email: input.email }, "Inscription sur un email déjà utilisé");
+    // Réponse identique à celle d'une inscription réussie, donc 201 : la route
+    // ne supprimera pas le fichier, c'est à faire ici.
+    await removeStoredFile(logo.filename);
     return { message: "Inscription enregistrée. Vérifiez votre boîte email." };
   }
 
@@ -164,10 +202,23 @@ export async function registerEntreprise(
       { email: input.email, passwordHash, role: Role.ENTREPRISE },
       tx,
     );
+
+    const document = await tx.document.create({
+      data: {
+        ownerId: user.id,
+        type: DocumentType.LOGO,
+        filename: sanitizeFilename(logo.originalname),
+        storedName: logo.filename,
+        mimeType: logo.mimetype,
+        size: logo.size,
+      },
+    });
+
     await tx.entreprise.create({
       data: {
         userId: user.id,
         nom: input.nom,
+        logo: `${env.API_PREFIX}/documents/${document.id}/contenu`,
         secteur: input.secteur,
         ville: input.ville,
         siteWeb: input.siteWeb ?? null,
@@ -177,6 +228,16 @@ export async function registerEntreprise(
         telephone: input.telephone,
         // Une entreprise n'accède pas aux talents avant validation par OMB (§7.2).
         status: "attente_contact",
+        // Couleurs relevées dans le logo par le navigateur. Le thème ne bascule
+        // sur « auto » que si au moins la principale est là : sans elle, il n'y
+        // a rien à calculer et le préréglage par défaut s'applique.
+        ...(input.themeCouleur
+          ? {
+              theme: ENTREPRISE_THEME_AUTO,
+              themeCouleur: input.themeCouleur,
+              themeAccent: input.themeAccent ?? null,
+            }
+          : {}),
       },
     });
     return user;
@@ -387,5 +448,5 @@ export async function changePassword(
 export async function me(userId: string): Promise<UserDto> {
   const user = await userRepository.findUserById(userId);
   if (!user) throw new UnauthenticatedError("Authentification requise.");
-  return toUserDto(user, profileIdOf(user));
+  return toUserDto(user, profileIdOf(user), await permissionsFor(user));
 }

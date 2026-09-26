@@ -40,6 +40,31 @@ export function findDemandeSpontaneeEnCours(entrepriseId: string, jeuneId: strin
   });
 }
 
+/**
+ * Les mêmes réservations, mais pour PLUSIEURS entreprises d'un coup.
+ *
+ * Sert à la liste : sans elle, le candidat ne découvre qu'il a déjà une demande
+ * chez une entreprise qu'en ouvrant son calendrier — un aller-retour pour
+ * apprendre qu'il n'y a rien à y faire.
+ *
+ * Une seule requête pour toute la page, et non une par fiche.
+ */
+export function listDemandesSpontaneesEnCours(jeuneId: string, entrepriseIds: string[]) {
+  return prisma.entretien.findMany({
+    where: {
+      jeuneId,
+      entrepriseId: { in: entrepriseIds },
+      spontanee: true,
+      OR: [{ status: "en_attente" }, { status: "accepte", date: { gte: debutDuJour() } }],
+    },
+    // Croissant : sur deux demandes chez la même entreprise — cas que le
+    // serveur interdit, mais que l'historique peut contenir — la première
+    // gagne, comme dans `findDemandeSpontaneeEnCours`.
+    orderBy: [{ date: "asc" }, { heure: "asc" }],
+    select: { id: true, entrepriseId: true, date: true, heure: true, status: true },
+  });
+}
+
 /** Minuit UTC du jour : une date programmée passée ne se réserve plus. */
 function debutDuJour(): Date {
   const jour = new Date();

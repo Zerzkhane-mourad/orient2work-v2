@@ -9,25 +9,12 @@
  * bouton là), et une notification sans lien pointait vers `#`.
  */
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { Icon, Skeleton } from "@/components/ui";
-import { DUREE_MENU, useTransitionUI } from "@/components/motion/transitions";
-import type { Notification } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import type { Densite, NotificationItemProps } from "./types";
 
-interface NotificationItemProps {
-  notification: Notification;
-  /**
-   * `compact` — cloche et tableau de bord : lecture rapide, pas d'actions.
-   * `comfortable` — page dédiée : détail complet, marquer comme lue, supprimer.
-   */
-  density?: "compact" | "comfortable";
-  /** Appelé à l'ouverture de la notification (clic sur la ligne). */
-  onOpen?: (notification: Notification) => void;
-  onMarkRead?: (id: string) => void;
-  onRemove?: (id: string) => void;
-  className?: string;
-}
+// Déplacée dans son propre fichier ; réexportée pour ses appelants historiques.
+export { UnreadBadge } from "./components/unread-badge";
 
 const dateComplete = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" });
 
@@ -48,9 +35,13 @@ export function NotificationItem({
         className={cn(
           "flex shrink-0 items-center justify-center rounded-full",
           compact ? "h-9 w-9" : "h-10 w-10 sm:h-11 sm:w-11",
+          // Or pour ce qui compte (accent), bleu nuit teinté pour le reste —
+          // et non un gris qui faisait passer chaque alerte pour éteinte.
           n.accent
             ? "bg-secondary-container text-on-secondary-container"
-            : "bg-surface-container text-on-surface-variant",
+            : unread
+              ? "bg-primary/10 text-primary"
+              : "bg-surface-container text-on-surface-variant",
         )}
       >
         <Icon name={n.icon} className={compact ? "text-[18px]" : "text-[20px]"} />
@@ -102,8 +93,10 @@ export function NotificationItem({
       className={cn(
         "group relative flex items-start gap-2 transition-colors",
         compact ? "px-4 py-3" : "px-4 py-4 sm:px-5",
+        // Non lue : voile bleu nuit très léger — se distingue d'une lue sans
+        // la griser, et reste lisible dans tous les thèmes.
         unread
-          ? "bg-surface-container-low hover:bg-surface-container"
+          ? "bg-primary/[0.05] hover:bg-primary/[0.09]"
           : "hover:bg-surface-container-low",
         className,
       )}
@@ -177,7 +170,7 @@ function ActionButton({
 }
 
 /** Squelette au gabarit exact d'une ligne : la liste ne saute pas à l'arrivée des données. */
-export function NotificationItemSkeleton({ density = "comfortable" }: { density?: "compact" | "comfortable" }) {
+export function NotificationItemSkeleton({ density = "comfortable" }: { density?: Densite }) {
   const compact = density === "compact";
   return (
     <li className={cn("flex items-start gap-3", compact ? "px-4 py-3" : "px-4 py-4 sm:px-5")}>
@@ -188,35 +181,5 @@ export function NotificationItemSkeleton({ density = "comfortable" }: { density?
         <Skeleton className="h-2.5 w-16" />
       </div>
     </li>
-  );
-}
-
-/**
- * Pastille chiffrée posée sur une icône.
- *
- * Plafonnée à « 9+ » : au-delà, le nombre exact n'aide plus à décider, et une
- * pastille qui s'élargit déborde de l'icône. Elle rebondit brièvement quand le
- * compteur change — c'est le seul signal qu'une notification vient d'arriver.
- * Décorative (`aria-hidden`) : le nombre est porté par le libellé du bouton.
- */
-export function UnreadBadge({ count, className }: { count: number; className?: string }) {
-  const transition = useTransitionUI(DUREE_MENU);
-  if (count <= 0) return null;
-  const label = count > 9 ? "9+" : String(count);
-
-  return (
-    <motion.span
-      key={label}
-      aria-hidden
-      initial={{ scale: 0.6 }}
-      animate={{ scale: 1 }}
-      transition={transition}
-      className={cn(
-        "absolute -right-2 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold leading-none text-on-error ring-2 ring-surface-container-lowest",
-        className,
-      )}
-    >
-      {label}
-    </motion.span>
   );
 }

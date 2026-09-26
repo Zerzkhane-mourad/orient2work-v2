@@ -17,7 +17,7 @@ import { useMutation } from "@/lib/api/use-api";
 const EMPTY = { nom: "", email: "", sujet: "", message: "" };
 
 /** Formulaire de contact public (§ page Contact). */
-export function ContactForm() {
+export function ContactForm({ className }: { className?: string }) {
   const [form, setForm] = useState(EMPTY);
   const [sent, setSent] = useState(false);
 
@@ -36,7 +36,7 @@ export function ContactForm() {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   return (
-    <Card className="lg:col-span-2">
+    <Card className={className}>
       <CardBody>
         {sent ? (
           <div className="flex flex-col items-center gap-4 py-10 text-center">

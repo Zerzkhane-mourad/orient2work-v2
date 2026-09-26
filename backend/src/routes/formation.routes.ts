@@ -5,7 +5,10 @@ import * as controller from "../controllers/formation.controller.js";
 import * as formationService from "../services/formation.service.js";
 import { asyncHandler, sendSuccess } from "../lib/http.js";
 import { authenticate, optionalAuthenticate } from "../middlewares/authenticate.js";
-import { requireAdmin, requireJeune } from "../middlewares/authorize.js";
+// Le catalogue de formations est public : il n'existe donc pas de
+// `formations:read`. Seule l'écriture se gouverne, d'où une permission unique
+// posée sur toutes les routes d'édition ci-dessous.
+import { requireAdmin, requireJeune, requirePermission } from "../middlewares/authorize.js";
 import { validate } from "../middlewares/validate.js";
 import { idParamSchema } from "../validators/common.validator.js";
 import { nestedIdParamsSchema } from "../validators/jeune.validator.js";
@@ -40,7 +43,9 @@ function uploadCouverture(req: Request, res: Response, next: NextFunction): void
 /**
  * @route GET /formations
  * @desc Catalogue. Enrichi de la progression si un jeune est connecté.
- * @access Public
+ * @access Public. Un ADMIN détenant `formations:read` y voit en plus les
+ *         BROUILLONS ; sans la permission il voit le catalogue public, la
+ *         route ne pouvant pas refuser ce qu'elle sert à tout visiteur.
  */
 formationRouter.get(
   "/",
@@ -122,6 +127,7 @@ formationRouter.post(
   "/medias",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   uploadCouverture,
   asyncHandler(controller.uploadMedia),
 );
@@ -153,6 +159,7 @@ formationRouter.post(
   "/:id/image",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema }),
   uploadCouverture,
   asyncHandler(controller.uploadImage),
@@ -167,6 +174,7 @@ formationRouter.post(
   "/",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ body: createFormationSchema }),
   asyncHandler(controller.create),
 );
@@ -193,6 +201,7 @@ formationRouter.patch(
   "/:id/quiz",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema, body: updateFormationQuizSchema }),
   asyncHandler(controller.updateQuizMeta),
 );
@@ -208,6 +217,7 @@ formationRouter.delete(
   "/:id/quiz",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema }),
   asyncHandler(controller.removeQuiz),
 );
@@ -222,6 +232,7 @@ formationRouter.post(
   "/:id/quiz/questions",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema, body: quizQuestionSchema }),
   asyncHandler(controller.addQuizQuestion),
 );
@@ -236,6 +247,7 @@ formationRouter.patch(
   "/:id/quiz/questions/:questionId",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: quizQuestionParamsSchema, body: updateQuizQuestionSchema }),
   asyncHandler(controller.updateQuizQuestion),
 );
@@ -248,6 +260,7 @@ formationRouter.delete(
   "/:id/quiz/questions/:questionId",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: quizQuestionParamsSchema }),
   asyncHandler(controller.removeQuizQuestion),
 );
@@ -272,6 +285,7 @@ formationRouter.patch(
   "/:id",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema, body: updateFormationSchema }),
   asyncHandler(controller.update),
 );
@@ -284,6 +298,7 @@ formationRouter.delete(
   "/:id",
   authenticate,
   requireAdmin,
+  requirePermission("formations:write"),
   validate({ params: idParamSchema }),
   asyncHandler(controller.remove),
 );

@@ -30,6 +30,7 @@ import {
   RetourLien,
   StatusBadge,
 } from "@/components/ui";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { EntrepriseStatus } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -48,6 +49,10 @@ export default function AdminEntrepriseDetailPage({
     refetch,
     setData,
   } = useApi(() => api.admin.entrepriseById(id), [id]);
+
+  // La fiche reste consultable en lecture seule ; seules les actions
+  // de statut demandent `entreprises:write`.
+  const peutEcrire = useCan("entreprises:write");
 
   const { run: setStatus, pending, error: actionError } = useMutation(api.admin.setEntrepriseStatus);
 
@@ -122,6 +127,7 @@ export default function AdminEntrepriseDetailPage({
             </div>
           </div>
 
+          {peutEcrire && (
           <div className="flex shrink-0 flex-col gap-2 sm:w-52">
             {entreprise.status !== "valide" && (
               <Button
@@ -163,6 +169,7 @@ export default function AdminEntrepriseDetailPage({
               </Button>
             )}
           </div>
+          )}
         </CardBody>
       </Card>
 

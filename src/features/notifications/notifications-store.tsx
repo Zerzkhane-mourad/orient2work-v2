@@ -12,6 +12,10 @@
  * La liste se rafraîchit discrètement chaque minute tant que l'onglet est
  * visible, et au retour sur l'onglet : une candidature reçue apparaît sans
  * recharger la page, et sans squelette qui clignote.
+ *
+ * Organisation : l'état et les effets vivent ici ; les types dans `types.ts`,
+ * les réglages dans `constants.ts`, et toute transformation de liste dans
+ * `lib/liste.ts` — des fonctions pures, lisibles et testables seules.
  */
 import {
   createContext,
@@ -26,57 +30,33 @@ import { api } from "@/lib/api";
 import { toNotification } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/errors";
 import type { Notification } from "@/lib/types";
+import { PAGE_SIZE, REFRESH_MS, UNDO_MS } from "./constants";
+import { useRafraichissementVisible } from "./hooks/use-rafraichissement-visible";
+import {
+  ajouterSansDoublon,
+  fusionnerPremierePage,
+  marquerLues,
+  reinserer,
+} from "./lib/liste";
+import type { NotificationsState, PendingRemoval } from "./types";
 
-const PAGE_SIZE = 20;
-const REFRESH_MS = 60_000;
-/** Délai pendant lequel une suppression peut encore être annulée. */
-export const UNDO_MS = 5_000;
-
-export interface NotificationsState {
-  notifications: Notification[];
-  unread: number;
-  /** Premier chargement uniquement — les rafraîchissements sont silencieux. */
-  loading: boolean;
-  error: ApiError | null;
-  hasMore: boolean;
-  loadingMore: boolean;
-  loadMoreFailed: boolean;
-  /** Dernière notification supprimée, tant que la suppression est annulable. */
-  removed: Notification | null;
-  refetch: () => void;
-  loadMore: () => Promise<void>;
-  markRead: (id: string) => Promise<void>;
-  markAllRead: () => Promise<void>;
-  remove: (id: string) => void;
-  undoRemove: () => void;
-}
-
-interface PendingRemoval {
-  item: Notification;
-  index: number;
-  timer: ReturnType<typeof setTimeout>;
-}
+// Réexportés pour les appelants historiques de ce module.
+export { UNDO_MS } from "./constants";
+export type { NotificationsState } from "./types";
 
 const NotificationsContext = createContext<NotificationsState | null>(null);
 
-function asApiError(caught: unknown): ApiError {
+function enApiError(caught: unknown): ApiError {
   return caught instanceof ApiError
     ? caught
     : new ApiError(0, "INTERNAL_ERROR", "Chargement des notifications impossible.");
 }
 
-/**
- * Fusionne la première page fraîche avec la liste affichée.
- *
- * La page 1 fait foi pour sa fenêtre de dates : ce qui en a disparu a été
- * supprimé ailleurs. Les notifications plus anciennes, chargées par « Afficher
- * plus », sont conservées — sinon un rafraîchissement ramènerait l'utilisateur
- * en haut d'une liste raccourcie.
- */
-function mergeFirstPage(current: Notification[], fresh: Notification[]): Notification[] {
-  const oldest = fresh.at(-1)?.createdAt;
-  const older = oldest ? current.filter((n) => n.createdAt < oldest) : [];
-  return [...fresh, ...older];
+/** Une page de l'API, déjà convertie au modèle de l'interface. */
+async function chargerPage(page = 1) {
+  const result = await api.notifications.list({ page, perPage: PAGE_SIZE });
+  const items = result.items.map(toNotification);
+  return { items, unread: result.unread, hasMore: items.length === PAGE_SIZE };
 }
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
@@ -100,17 +80,19 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     latest.current = notifications;
   }, [notifications]);
 
+  /* ── Chargement ─────────────────────────────────────────────────────── */
+
   const loadFirstPage = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.notifications.list({ perPage: PAGE_SIZE });
+      const premiere = await chargerPage();
       page.current = 1;
-      setNotifications(result.items.map(toNotification));
-      setUnread(result.unread);
-      setHasMore(result.items.length === PAGE_SIZE);
+      setNotifications(premiere.items);
+      setUnread(premiere.unread);
+      setHasMore(premiere.hasMore);
     } catch (caught) {
-      setError(asApiError(caught));
+      setError(enApiError(caught));
     } finally {
       setLoading(false);
     }
@@ -118,13 +100,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const refresh = useCallback(async () => {
     try {
-      const result = await api.notifications.list({ perPage: PAGE_SIZE });
+      const premiere = await chargerPage();
       // Une suppression en attente d'annulation reste masquée : le serveur ne
       // l'a pas encore reçue, elle reviendrait sinon au premier rafraîchissement.
-      const hidden = pending.current?.item;
-      const fresh = result.items.map(toNotification).filter((n) => n.id !== hidden?.id);
-      setNotifications((current) => mergeFirstPage(current, fresh));
-      setUnread(Math.max(0, result.unread - (hidden && !hidden.read ? 1 : 0)));
+      const cachee = pending.current?.item;
+      const fraiches = premiere.items.filter((n) => n.id !== cachee?.id);
+      setNotifications((actuelles) => fusionnerPremierePage(actuelles, fraiches));
+      setUnread(Math.max(0, premiere.unread - (cachee && !cachee.read ? 1 : 0)));
       setError(null);
     } catch {
       // Silencieux : la liste affichée reste valable, le prochain passage réessaiera.
@@ -135,17 +117,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     void loadFirstPage();
   }, [loadFirstPage]);
 
-  useEffect(() => {
-    const whenVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    const timer = setInterval(whenVisible, REFRESH_MS);
-    document.addEventListener("visibilitychange", whenVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", whenVisible);
-    };
-  }, [refresh]);
+  const rafraichir = useCallback(() => void refresh(), [refresh]);
+  useRafraichissementVisible(rafraichir, REFRESH_MS);
 
   const loadMore = useCallback(async () => {
     if (fetchingMore.current) return;
@@ -153,18 +126,12 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     setLoadingMore(true);
     setLoadMoreFailed(false);
     try {
-      const next = page.current + 1;
-      const result = await api.notifications.list({ page: next, perPage: PAGE_SIZE });
-      page.current = next;
-      const items = result.items.map(toNotification);
-      // Des notifications arrivées entre-temps décalent les pages : les doublons
-      // en bordure de page sont écartés.
-      setNotifications((current) => {
-        const known = new Set(current.map((n) => n.id));
-        return [...current, ...items.filter((n) => !known.has(n.id))];
-      });
-      setUnread(result.unread);
-      setHasMore(items.length === PAGE_SIZE);
+      const suivante = page.current + 1;
+      const resultat = await chargerPage(suivante);
+      page.current = suivante;
+      setNotifications((actuelles) => ajouterSansDoublon(actuelles, resultat.items));
+      setUnread(resultat.unread);
+      setHasMore(resultat.hasMore);
     } catch {
       setLoadMoreFailed(true);
     } finally {
@@ -173,12 +140,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
+  /* ── Lecture ────────────────────────────────────────────────────────── */
+
   const markRead = useCallback(
     async (id: string) => {
-      const target = latest.current.find((n) => n.id === id);
-      if (!target || target.read) return;
+      const cible = latest.current.find((n) => n.id === id);
+      if (!cible || cible.read) return;
       // Optimiste : la pastille réagit au clic, pas à l'aller-retour réseau.
-      setNotifications((list) => list.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      setNotifications((liste) => marquerLues(liste, id));
       setUnread((count) => Math.max(0, count - 1));
       try {
         await api.notifications.markRead(id);
@@ -190,7 +159,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   );
 
   const markAllRead = useCallback(async () => {
-    setNotifications((list) => list.map((n) => (n.read ? n : { ...n, read: true })));
+    setNotifications((liste) => marquerLues(liste));
     setUnread(0);
     try {
       await api.notifications.markAllRead();
@@ -198,6 +167,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       void refresh();
     }
   }, [refresh]);
+
+  /* ── Suppression annulable ──────────────────────────────────────────── */
 
   const commitRemoval = useCallback(
     (entry: PendingRemoval) => {
@@ -214,10 +185,10 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
    */
   const remove = useCallback(
     (id: string) => {
-      const list = latest.current;
-      const index = list.findIndex((n) => n.id === id);
-      if (index === -1) return;
-      const item = list[index];
+      const liste = latest.current;
+      const index = liste.findIndex((n) => n.id === id);
+      const item = liste[index];
+      if (!item) return;
 
       // Une seule suppression annulable à la fois : la précédente est validée.
       if (pending.current) commitRemoval(pending.current);
@@ -231,7 +202,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
       pending.current = { item, index, timer };
       setRemoved(item);
-      setNotifications((current) => current.filter((n) => n.id !== id));
+      setNotifications((actuelles) => actuelles.filter((n) => n.id !== id));
       if (!item.read) setUnread((count) => Math.max(0, count - 1));
     },
     [commitRemoval],
@@ -243,11 +214,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     clearTimeout(entry.timer);
     pending.current = null;
     setRemoved(null);
-    setNotifications((current) => {
-      const copy = [...current];
-      copy.splice(Math.min(entry.index, copy.length), 0, entry.item);
-      return copy;
-    });
+    setNotifications((actuelles) => reinserer(actuelles, entry.item, entry.index));
     if (!entry.item.read) setUnread((count) => count + 1);
   }, []);
 

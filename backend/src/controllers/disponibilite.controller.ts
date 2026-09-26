@@ -20,6 +20,7 @@ export async function updateReglages(req: Request, res: Response): Promise<void>
 
 export async function listEntreprisesOuvertes(req: Request, res: Response): Promise<void> {
   const { items, meta } = await service.listEntreprisesOuvertes(
+    currentActor(req),
     query<ListEntreprisesOuvertesInput>(req),
   );
   sendSuccess(res, items, 200, meta);

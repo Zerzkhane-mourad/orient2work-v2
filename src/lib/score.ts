@@ -1,5 +1,25 @@
 import type { IconName } from "@/components/ui/icon";
-import type { Jeune } from "./types";
+
+/**
+ * Ce dont le score a réellement besoin.
+ *
+ * Le module prenait un `Jeune` entier — donc la vue PROPRIÉTAIRE du profil,
+ * avec email, téléphone et liens personnels. La fiche talent, qui reçoit une
+ * vue publique amputée de ces trois champs, ne pouvait pas l'appeler pour
+ * détailler l'employabilité d'un candidat.
+ *
+ * `Jeune` satisfait cette forme par construction : les appelants existants
+ * n'ont rien à changer.
+ */
+export interface ScoreSource {
+  profilCompletion: number;
+  scoreQuiz?: number;
+  /** Ids des formations dont le cours a été lu jusqu'au bout. */
+  formationsLues?: string[];
+  /** Ids des formations dont le quiz a été réussi. */
+  formationsValidees?: string[];
+  candidatures: number;
+}
 
 /**
  * Score d'employabilité du jeune (0–100).
@@ -47,14 +67,14 @@ export interface ScorePart {
  * « Crédits formation » du jeune : une formation validée vaut 1, un cours lu
  * mais dont le quiz n'est pas encore réussi vaut 0,5.
  */
-export function formationsCredits(jeune: Jeune): number {
+export function formationsCredits(jeune: ScoreSource): number {
   const validees = jeune.formationsValidees ?? [];
   const luesSeules = (jeune.formationsLues ?? []).filter((id) => !validees.includes(id));
   return validees.length + luesSeules.length * 0.5;
 }
 
 /** Détail du score, levier par levier. */
-export function scoreParts(jeune: Jeune): ScorePart[] {
+export function scoreParts(jeune: ScoreSource): ScorePart[] {
   const test = jeune.scoreQuiz ?? 0;
   const credits = formationsCredits(jeune);
   const validees = jeune.formationsValidees?.length ?? 0;
@@ -109,13 +129,13 @@ export function scoreParts(jeune: Jeune): ScorePart[] {
 }
 
 /** Score global (0–100) dérivé du profil. */
-export function computeScoreJeune(jeune: Jeune): number {
+export function computeScoreJeune(jeune: ScoreSource): number {
   const total = scoreParts(jeune).reduce((sum, p) => sum + p.points, 0);
   return Math.max(0, Math.min(100, total));
 }
 
 /** Levier qui rapporterait le plus de points — sert à orienter le jeune. */
-export function prochainLevier(jeune: Jeune): ScorePart | null {
+export function prochainLevier(jeune: ScoreSource): ScorePart | null {
   const restants = scoreParts(jeune).filter((p) => p.points < p.max);
   if (restants.length === 0) return null;
   return restants.reduce((best, p) => (p.max - p.points > best.max - best.points ? p : best));

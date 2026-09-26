@@ -21,6 +21,8 @@ import { usePageSize, usePagination } from "@/lib/use-pagination";
 import { OPPORTUNITY_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { OffreCard } from "./offre-card";
+import { OffreLigne } from "./offre-ligne";
+import { accentType } from "./presentation";
 import { TYPE_TOUS, useRechercheOffres } from "./use-recherche-offres";
 
 /**
@@ -63,37 +65,54 @@ export function OffresBrowser({ detailBase, variant = "grid" }: OffresBrowserPro
 
   return (
     <div className="space-y-6">
-      <div className="relative">
-        <Icon
-          name="search"
-          className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-        />
+      {/* Champ en relief, anneau or au focus : c'est le point d'entrée de
+          l'écran, il doit se voir avant la liste. */}
+      <div className="group relative">
+        <span className="pointer-events-none absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-focus-within:bg-primary group-focus-within:text-on-primary">
+          <Icon name="search" className="text-[20px]" />
+        </span>
         <input
           type="search"
           value={terme}
           onChange={(e) => setTerme(e.target.value)}
           placeholder="Rechercher par titre, entreprise, ville ou compétence…"
           aria-label="Rechercher une offre"
-          className="w-full rounded-full border border-outline-variant bg-surface-container-lowest py-3 pl-12 pr-4 text-body-md focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary"
+          className="w-full rounded-full border border-outline-variant bg-surface-container-lowest py-3.5 pl-14 pr-4 text-body-md shadow-level-1 transition-shadow placeholder:text-on-surface-variant/80 focus:border-secondary-container focus:shadow-level-2 focus:outline-none focus:ring-4 focus:ring-secondary-container/40"
         />
       </div>
 
+      {/* Chaque type porte sa pastille de couleur — la même que le liseré de
+          ses cartes. Actif : plein, en bleu nuit, pastille cerclée de blanc. */}
       <div className="flex flex-wrap gap-2">
-        {[TYPE_TOUS, ...OPPORTUNITY_TYPES].map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setType(t)}
-            className={cn(
-              "rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
-              type === t
-                ? "bg-primary text-on-primary"
-                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-            )}
-          >
-            {t}
-          </button>
-        ))}
+        {[TYPE_TOUS, ...OPPORTUNITY_TYPES].map((t) => {
+          const actif = type === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              aria-pressed={actif}
+              className={cn(
+                "inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-all duration-200",
+                actif
+                  ? "border-primary bg-primary text-on-primary shadow-level-1"
+                  : "border-outline-variant bg-surface-container-lowest text-on-surface hover:-translate-y-px hover:border-primary/40 hover:text-primary",
+              )}
+            >
+              {t !== TYPE_TOUS && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-2.5 w-2.5 rounded-full",
+                    accentType(t),
+                    actif && "ring-2 ring-white/80",
+                  )}
+                />
+              )}
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {error ? (
@@ -108,7 +127,21 @@ export function OffresBrowser({ detailBase, variant = "grid" }: OffresBrowserPro
         </div>
       ) : (
         <div ref={listRef} className="space-y-6">
-          {offres.length > 0 ? (
+          {offres.length > 0 && variant === "list" && detailBase ? (
+            // La clé suit la requête : chaque nouveau résultat rejoue
+            // l'apparition en cascade, et l'œil voit que la liste a changé.
+            <div key={`${termeApplique}|${type}|${page}`} className="space-y-4">
+              {offres.map((o, rang) => (
+                <div
+                  key={o.id}
+                  className="apparition"
+                  style={{ "--rang": rang } as React.CSSProperties}
+                >
+                  <OffreLigne offre={o} href={`${detailBase}/${o.id}`} />
+                </div>
+              ))}
+            </div>
+          ) : offres.length > 0 ? (
             <div
               className={
                 variant === "list" ? "space-y-4" : "grid gap-6 md:grid-cols-2 lg:grid-cols-3"

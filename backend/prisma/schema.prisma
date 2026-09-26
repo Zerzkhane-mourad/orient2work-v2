@@ -115,12 +115,22 @@ model User {
   email           String    @unique
   passwordHash    String
   role            Role
+  /// Nom d'affichage. Renseigné pour les comptes ADMIN seulement : eux n'ont pas
+  /// de profil métier où le ranger, alors qu'un jeune a `Jeune.nom` et une
+  /// entreprise `Entreprise.nom`.
+  nom             String?
   emailVerified   Boolean   @default(false)
   emailVerifiedAt DateTime?
   isActive        Boolean   @default(true)
   lastLoginAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  /// Rôle d'administration — pertinent pour `role = ADMIN` uniquement.
+  /// `Restrict` : un rôle encore porté par un compte ne peut pas disparaître
+  /// sous lui, ce qui le priverait silencieusement de toutes ses permissions.
+  roleAdminId String?    @db.Uuid
+  roleAdmin   RoleAdmin? @relation(fields: [roleAdminId], references: [id], onDelete: Restrict)
 
   jeune         Jeune?
   entreprise    Entreprise?
@@ -131,7 +141,36 @@ model User {
 
   @@index([role])
   @@index([createdAt])
+  @@index([roleAdminId])
   @@map("users")
+}
+
+/// Rôle d'administration : un jeu de permissions nommé, porté par des comptes ADMIN.
+///
+/// L'enum `Role` reste le TYPE de compte (jeune, entreprise, administrateur) ;
+/// ce modèle dit ce qu'un administrateur a le droit de faire. Les deux ne se
+/// confondent pas : le premier décide de quel espace on ouvre, le second de
+/// quels écrans y sont accessibles.
+///
+/// `permissions` contient des codes du catalogue `src/domain/permissions.ts` —
+/// et non une relation vers une table de permissions. Le catalogue est une
+/// constante du code (un code sans garde correspondant ne protégerait rien), une
+/// table ne ferait que le dupliquer, à charge de les garder synchronisés.
+model RoleAdmin {
+  id          String   @id @default(uuid()) @db.Uuid
+  nom         String   @unique
+  description String   @default("")
+  permissions String[]
+  /// Rôle fondateur : permissions calculées (tout le catalogue), non modifiables,
+  /// non supprimable. Il garantit qu'aucune manipulation du back-office ne peut
+  /// laisser la plateforme sans personne capable de rouvrir les droits.
+  systeme     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  utilisateurs User[]
+
+  @@map("roles_admin")
 }
 
 /// Refresh token à usage unique. Seul le SHA-256 est stocké : une fuite de la base
@@ -271,7 +310,16 @@ model Entreprise {
   /// Palette de l'espace entreprise, choisie dans les paramètres.
   /// Chaîne plutôt qu'enum : ajouter un thème ne demande aucune migration,
   /// la liste autorisée vit dans `entreprise.validator.ts`.
+  /// La valeur « auto » calcule la palette depuis les deux couleurs ci-dessous.
   theme            String           @default("marine")
+  /// Couleur principale relevée dans le logo, en hexadécimal (`#c81e3a`).
+  /// Renseignée à l'inscription et à chaque remplacement du logo. Nulle pour
+  /// les comptes créés avant que le logo ne devienne obligatoire : le thème
+  /// `auto` leur est alors indisponible et `theme` garde un des préréglages.
+  themeCouleur     String?
+  /// Couleur d'accent relevée dans le logo. Nulle si le logo n'en contient
+  /// qu'une seule : la famille secondaire suit alors la teinte principale.
+  themeAccent      String?
 
   /// Ouvre la prise de rendez-vous spontanée aux jeunes validés (§10).
   /// Fermé par défaut : une entreprise ne reçoit de demandes que si elle l'a décidé.

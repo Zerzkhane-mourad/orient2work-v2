@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink, Icon } from "@/components/ui";
+import { SectionHeading } from "@/components/marketing/section-heading";
 import { Reveal } from "@/components/motion/reveal";
 import { BandeConfiance } from "@/features/home/bande-confiance";
 import { CategoriesSection } from "@/features/home/categories-section";
@@ -27,38 +28,6 @@ async function loadTemoignages(): Promise<ApiTemoignage[]> {
 /** Questions saisies au back-office, dans l'ordre voulu par l'administrateur. */
 async function loadFaq(): Promise<ApiFaq[]> {
   return serverFetch<ApiFaq[]>("/faq").catch(() => []);
-}
-
-/**
- * En-tête de section.
- *
- * SANS surtitre : le petit label en capitales posé au-dessus de chaque titre
- * produit le rythme répétitif qui trahit une page composée à la chaîne, et la
- * position de la section suffit à la situer. Le titre porte seul.
- */
-function EnTeteSection({ titre, soustitre }: { titre: string; soustitre?: string }) {
-  return (
-    /* `text-balance` : le navigateur répartit lui-même les mots entre les
-       lignes, au lieu de laisser un titre de deux lignes se terminer sur un mot
-       isolé. Gratuit, et c'est ce qui distingue un titre composé d'un titre
-       simplement coupé. */
-    /*
-     * Corps porté à 36px au-delà de `sm`.
-     *
-     * À 30px, les titres de section n'étaient qu'à moitié du h1 du héros (60px)
-     * tout en dépassant à peine le corps des citations (24px) : la marche entre
-     * « je change de sujet » et « je lis un paragraphe » ne se voyait pas. Le
-     * saut est désormais franc des deux côtés.
-     */
-    <Reveal className="mb-10 max-w-2xl space-y-3 lg:mb-12">
-      <h2 className="text-balance font-headline text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-        {titre}
-      </h2>
-      {soustitre && (
-        <p className="text-pretty text-lg text-on-surface-variant">{soustitre}</p>
-      )}
-    </Reveal>
-  );
 }
 
 /**
@@ -103,9 +72,9 @@ export default async function HomePage() {
 
       {/* Catégories : première porte vers le catalogue */}
       <section className="mx-auto max-w-container-max px-margin-mobile py-16 lg:px-margin-desktop lg:py-24">
-        <EnTeteSection
-          titre="Quel type d'opportunité cherchez-vous ?"
-          soustitre="Six entrées vers le catalogue, sans passer par la recherche."
+        <SectionHeading
+          title="Quel type d'opportunité cherchez-vous ?"
+          subtitle="Six entrées vers le catalogue, sans passer par la recherche."
         />
         <Reveal cascade>
           <CategoriesSection />
@@ -115,9 +84,9 @@ export default async function HomePage() {
       {/* Double parcours */}
       <section className="border-y border-outline-variant bg-surface-container-low py-16 lg:py-24">
         <div className="mx-auto max-w-container-max px-margin-mobile lg:px-margin-desktop">
-          <EnTeteSection
-            titre="Deux parcours, deux rythmes"
-            soustitre="Ce que vous avez à faire dépend du côté d'où vous arrivez."
+          <SectionHeading
+            title="Deux parcours, deux rythmes"
+            subtitle="Ce que vous avez à faire dépend du côté d'où vous arrivez."
           />
           <DoubleParcours />
         </div>
@@ -133,9 +102,9 @@ export default async function HomePage() {
           */}
           <div className="champ-degrade-clair rounded-xl px-margin-mobile py-16 sm:rounded-[1.75rem] lg:px-12 lg:py-24">
             <div className="mx-auto max-w-container-max">
-              <EnTeteSection
-                titre="Ce qu'en disent les candidats"
-                soustitre="Des avis laissés après une formation suivie jusqu'au bout."
+              <SectionHeading
+                title="Ce qu'en disent les candidats"
+                subtitle="Des avis laissés après une formation suivie jusqu'au bout."
               />
               <TemoignagesSection temoignages={temoignages} />
             </div>

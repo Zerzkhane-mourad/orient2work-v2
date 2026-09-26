@@ -30,6 +30,7 @@ import {
   StatusBadge,
   Textarea,
 } from "@/components/ui";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { OffreStatus } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -42,6 +43,10 @@ export default function AdminOffreDetailPage({ params }: { params: Promise<{ id:
   const [motif, setMotif] = useState("");
 
   const { data: offre, loading, error, refetch, setData } = useApi(() => api.offres.byId(id), [id]);
+
+  // La fiche reste consultable en lecture seule ; seules les actions
+  // de statut demandent `offres:write`.
+  const peutEcrire = useCan("offres:write");
 
   const { run: moderate, pending, error: actionError } = useMutation(api.admin.moderateOffre);
 
@@ -115,6 +120,7 @@ export default function AdminOffreDetailPage({ params }: { params: Promise<{ id:
             </div>
           </div>
 
+          {peutEcrire && (
           <div className="flex shrink-0 flex-col gap-2 lg:w-56">
             {offre.status !== "publiee" && (
               <Button
@@ -138,6 +144,7 @@ export default function AdminOffreDetailPage({ params }: { params: Promise<{ id:
               </Button>
             )}
           </div>
+          )}
         </CardBody>
       </Card>
 

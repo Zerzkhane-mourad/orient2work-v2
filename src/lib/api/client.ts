@@ -246,6 +246,32 @@ export const http = {
     formData.append("file", file);
     return request<T>(path, { ...options, method: "POST", formData });
   },
+
+  /**
+   * POST d'un formulaire comportant un fichier ET des champs texte.
+   *
+   * Distinct d'`upload`, qui n'envoie que le fichier : ici le serveur reçoit le
+   * formulaire complet en `multipart/form-data`, et tout arrive donc en
+   * chaînes. Les valeurs `undefined` et `null` sont omises plutôt qu'envoyées —
+   * `FormData` les sérialiserait en « undefined » / « null », littéralement,
+   * et un champ optionnel vide deviendrait une valeur invalide à valider.
+   */
+  postForm: <T>(
+    path: string,
+    fields: Record<string, string | number | boolean | undefined | null>,
+    files: Record<string, File>,
+    options?: RequestOptions,
+  ) => {
+    const formData = new FormData();
+    for (const [name, value] of Object.entries(fields)) {
+      if (value === undefined || value === null || value === "") continue;
+      formData.append(name, String(value));
+    }
+    for (const [name, file] of Object.entries(files)) {
+      formData.append(name, file);
+    }
+    return request<T>(path, { ...options, method: "POST", formData });
+  },
 };
 
 /**

@@ -32,7 +32,8 @@ export interface CreateEntretienInput {
   date: string;
   /** `HH:MM`. */
   heure: string;
-  lienReunion?: string;
+  /** Obligatoire : l'entreprise qui propose fournit la salle de visio. */
+  lienReunion: string;
   commentaire?: string;
 }
 
@@ -65,6 +66,14 @@ export const entretiensApi = {
     status: "accepte" | "refuse",
     options: { commentaire?: string; lienReunion?: string } = {},
   ) => http.post<ApiEntretien>(`/entretiens/${id}/reponse`, { status, ...options }),
+
+  /**
+   * Retrait par le candidat de sa propre candidature spontanée, encore en
+   * attente. Le créneau redevient réservable par d'autres.
+   *
+   * Distinct de `update` : le candidat renonce, il ne replanifie pas.
+   */
+  retirer: (id: string) => http.post<ApiEntretien>(`/entretiens/${id}/retrait`, {}),
 
   /** Replanification ou annulation par l'entreprise organisatrice. */
   update: (

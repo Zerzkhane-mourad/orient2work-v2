@@ -1,10 +1,20 @@
 import type { IconName } from "@/components/ui/icon";
+import type { Permission } from "@/lib/api/types";
 /** Navigation maps for each space. Pages (§12) are the source of truth here. */
 
 export interface NavItem {
   label: string;
   href: string;
   icon: IconName;
+  /**
+   * Permissions donnant accès à l'écran — l'entrée s'affiche dès que l'une
+   * d'elles est détenue (voir `filterNav`).
+   *
+   * Plusieurs codes pour un même écran parce qu'un écran de liste se CONSULTE
+   * avec `…:read` et s'ÉDITE avec `…:write` : celui qui ne peut que lire doit
+   * quand même voir l'entrée. Absente = visible par tout administrateur.
+   */
+  permissions?: Permission[];
 }
 
 /**
@@ -74,20 +84,69 @@ export const entrepriseNav: NavItem[] = [
   { label: "Paramètres", href: "/espace-entreprise/parametres", icon: "settings" },
 ];
 
+/**
+ * Navigation du back-office.
+ *
+ * Chaque entrée déclare les permissions qui y donnent accès ; `filterNav` ne
+ * garde que celles que l'administrateur connecté peut réellement ouvrir. Les
+ * codes doivent correspondre aux gardes posés sur les routes
+ * (`backend/src/routes/admin.routes.ts`) — une entrée annoncée sans garde
+ * derrière mènerait à un écran d'erreur.
+ *
+ * « Dashboard » et « Paramètres » restent sans permission, délibérément : le
+ * premier est la page d'arrivée du rôle ADMIN — la masquer laisserait
+ * l'administrateur sans destination après connexion —, le second ne porte que
+ * des préférences personnelles.
+ */
 export const adminNav: NavEntry[] = [
   { label: "Dashboard", href: "/admin", icon: "dashboard" },
-  { label: "Jeunes", href: "/admin/jeunes", icon: "school" },
-  { label: "Entreprises", href: "/admin/entreprises", icon: "business" },
-  { label: "Offres", href: "/admin/offres", icon: "work" },
-  { label: "Formations", href: "/admin/formations", icon: "menu_book" },
+  {
+    label: "Jeunes",
+    href: "/admin/jeunes",
+    icon: "school",
+    permissions: ["jeunes:read", "jeunes:write"],
+  },
+  {
+    label: "Entreprises",
+    href: "/admin/entreprises",
+    icon: "business",
+    permissions: ["entreprises:read", "entreprises:write"],
+  },
+  {
+    label: "Offres",
+    href: "/admin/offres",
+    icon: "work",
+    permissions: ["offres:read", "offres:write"],
+  },
+  {
+    label: "Formations",
+    href: "/admin/formations",
+    icon: "menu_book",
+    permissions: ["formations:read", "formations:write"],
+  },
   // « Test des comptes » et non « Test » tout court : le catalogue a lui aussi
   // un test par formation, et deux entrées homonymes ne se distingueraient pas.
-  { label: "Test des comptes", href: "/admin/quiz", icon: "quiz" },
-  { label: "Entretiens", href: "/admin/entretiens", icon: "event" },
-  { label: "Messages", href: "/admin/messages", icon: "mail" },
+  {
+    label: "Test des comptes",
+    href: "/admin/quiz",
+    icon: "quiz",
+    permissions: ["tests:read", "tests:write"],
+  },
+  {
+    label: "Entretiens",
+    href: "/admin/entretiens",
+    icon: "event",
+    permissions: ["entretiens:read"],
+  },
+  {
+    label: "Messages",
+    href: "/admin/messages",
+    icon: "mail",
+    permissions: ["messages:read", "messages:write"],
+  },
   // Voisine de « Messages » : les deux touchent à ce que le visiteur demande.
   // Une bonne FAQ fait baisser le second, c'est le même sujet vu de deux côtés.
-  { label: "FAQ", href: "/admin/faq", icon: "help" },
+  { label: "FAQ", href: "/admin/faq", icon: "help", permissions: ["faq:read", "faq:write"] },
   {
     // Groupe repliable : d'autres listes de valeurs viendront s'y ajouter
     // (filières, types d'opportunité…) sans allonger la barre latérale.
@@ -98,10 +157,67 @@ export const adminNav: NavEntry[] = [
         label: "Catégories de formation",
         href: "/admin/referentiels/categories-formation",
         icon: "menu_book",
+        permissions: ["referentiels:read", "referentiels:write"],
       },
-      { label: "Filières", href: "/admin/referentiels/filieres", icon: "school" },
+      {
+        label: "Filières",
+        href: "/admin/referentiels/filieres",
+        icon: "school",
+        permissions: ["referentiels:read", "referentiels:write"],
+      },
     ],
   },
-  { label: "Statistiques", href: "/admin/statistiques", icon: "bar_chart" },
+  {
+    // Groupé plutôt que posé à plat : ces deux écrans ne gouvernent pas la
+    // plateforme mais le back-office lui-même, et se lisent ensemble — un
+    // compte n'a de droits que par le rôle qu'on lui attribue.
+    label: "Accès",
+    icon: "lock",
+    children: [
+      {
+        label: "Utilisateurs",
+        href: "/admin/utilisateurs",
+        icon: "badge",
+        permissions: ["utilisateurs:read", "utilisateurs:write"],
+      },
+      {
+        label: "Rôles et permissions",
+        href: "/admin/roles",
+        icon: "verified_user",
+        permissions: ["roles:read", "roles:write"],
+      },
+    ],
+  },
+  {
+    label: "Statistiques",
+    href: "/admin/statistiques",
+    icon: "bar_chart",
+    permissions: ["statistiques:read"],
+  },
   { label: "Paramètres", href: "/admin/parametres", icon: "settings" },
 ];
+
+/**
+ * Ne garde que les entrées ouvrables par l'utilisateur courant.
+ *
+ * Un groupe dont tous les enfants sont masqués disparaît : le laisser afficherait
+ * une rubrique qui se déplie sur rien.
+ *
+ * `canAny` est injecté plutôt qu'importé — ce module est du data pur, lisible
+ * depuis un composant serveur comme depuis un composant client.
+ */
+export function filterNav(
+  entries: NavEntry[],
+  canAny: (...permissions: Permission[]) => boolean,
+): NavEntry[] {
+  return entries.reduce<NavEntry[]>((visibles, entry) => {
+    if (!isNavGroup(entry)) {
+      if (canAny(...(entry.permissions ?? []))) visibles.push(entry);
+      return visibles;
+    }
+
+    const children = entry.children.filter((child) => canAny(...(child.permissions ?? [])));
+    if (children.length > 0) visibles.push({ ...entry, children });
+    return visibles;
+  }, []);
+}

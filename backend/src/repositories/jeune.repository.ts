@@ -8,8 +8,34 @@ const fullInclude = {
   filiere: { select: { nom: true } },
   experiences: { orderBy: { ordre: "asc" } },
   liens: true,
+  /*
+   * La formation est jointe, et non seulement son identifiant.
+   *
+   * Le profil ne portait que des `formationId` : la fiche talent ne pouvait
+   * donc afficher qu'un NOMBRE — « 3 formation(s) validée(s) » — là où le
+   * recruteur veut savoir LESQUELLES. Résoudre les titres côté client aurait
+   * demandé un appel par formation, sur des données que cette requête ramène
+   * déjà en une jointure.
+   */
   progressions: {
-    select: { formationId: true, lu: true, valide: true, meilleurScore: true, progression: true },
+    select: {
+      formationId: true,
+      lu: true,
+      valide: true,
+      valideAt: true,
+      meilleurScore: true,
+      progression: true,
+      certificatNumero: true,
+      formation: {
+        select: {
+          titre: true,
+          niveau: true,
+          certifiante: true,
+          tempsLectureMin: true,
+          categorie: { select: { nom: true } },
+        },
+      },
+    },
   },
   _count: { select: { candidatures: true } },
 } satisfies Prisma.JeuneInclude;

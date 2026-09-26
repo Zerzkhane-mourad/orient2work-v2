@@ -13,7 +13,9 @@ import { api } from "@/lib/api";
 import { ApiError } from "@/lib/api/errors";
 import type { ApiEntreprise } from "@/lib/api/types";
 import { useApi } from "@/lib/api/use-api";
+import { couleursDuFichier } from "@/lib/color";
 import type { UpdateEntrepriseInput } from "@/lib/api/endpoints/entreprises";
+import { DEFAULT_ENTREPRISE_THEME, THEME_AUTO } from "./themes";
 
 interface EntrepriseStore {
   entreprise: ApiEntreprise;
@@ -67,7 +69,36 @@ export function EntrepriseProvider({ children }: { children: React.ReactNode }) 
       uploadLogo: async (file) => {
         await mutate(async () => {
           await api.documents.upload("LOGO", file);
-          return api.entreprises.me();
+
+          /*
+           * Les couleurs du thème sont relevées DANS le logo : changer de logo
+           * sans les relire laisserait l'espace aux couleurs du précédent.
+           *
+           * Le thème lui-même n'est pas touché — une entreprise qui a choisi un
+           * préréglage le garde. Seules les couleurs enregistrées suivent, ce
+           * qui maintient aussi l'aperçu du thème « Vos couleurs » à jour.
+           */
+          const couleurs = await couleursDuFichier(file, 2).catch(() => []);
+
+          if (couleurs.length > 0) {
+            return api.entreprises.update({
+              themeCouleur: couleurs[0].hex,
+              themeAccent: couleurs[1]?.hex ?? null,
+            });
+          }
+
+          // Nouveau logo sans teinte dominante. Les anciennes couleurs ne
+          // décrivent plus rien : on les efface, et un espace qui était en
+          // thème calculé revient au préréglage par défaut — le serveur
+          // refuserait « auto » sans couleur, et il aurait raison.
+          if (data.theme === THEME_AUTO) {
+            return api.entreprises.update({
+              theme: DEFAULT_ENTREPRISE_THEME,
+              themeCouleur: null,
+              themeAccent: null,
+            });
+          }
+          return api.entreprises.update({ themeCouleur: null, themeAccent: null });
         });
       },
       refetch,

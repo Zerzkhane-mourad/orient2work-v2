@@ -21,7 +21,7 @@ import {
   storedPath,
 } from "../lib/upload.js";
 import { env } from "../config/env.js";
-import { isAdmin, type Actor } from "../middlewares/authorize.js";
+import { hasPermission, isAdmin, type Actor } from "../middlewares/authorize.js";
 import * as repository from "../repositories/formation.repository.js";
 import * as jeuneRepository from "../repositories/jeune.repository.js";
 import * as documentRepository from "../repositories/document.repository.js";
@@ -52,6 +52,12 @@ export async function list(
   actor: Actor | null,
   input: ListFormationsInput,
 ): Promise<{ items: FormationSummaryDto[]; meta: ApiMeta }> {
+  // Un brouillon n'est visible que de l'administrateur qui détient
+  // `formations:read`. Sans la permission on DÉGRADE vers la vue publique
+  // plutôt que de refuser : la route sert aussi le site vitrine, un 403 y
+  // serait absurde.
+  const voitBrouillons = actor !== null && (await hasPermission(actor, "formations:read"));
+
   const where = repository.buildFormationWhere({
     q: input.q,
     categorieId: input.categorieId,
@@ -59,8 +65,7 @@ export async function list(
     niveau: input.niveau,
     certifiante: input.certifiante,
     populaire: input.populaire,
-    // Un brouillon n'est visible que de l'admin.
-    ...(actor && isAdmin(actor) ? {} : { publiee: true }),
+    ...(voitBrouillons ? {} : { publiee: true }),
   });
 
   // Une seule requête pour toutes les progressions du jeune, plutôt qu'une par

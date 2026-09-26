@@ -5,7 +5,8 @@ import { Card, CardBody, CardHeader, CardTitle, ErrorBanner, Icon } from "@/comp
 import { cn } from "@/lib/utils";
 import type { EntrepriseThemeId } from "@/lib/api/types";
 import { useEntreprise } from "./entreprise-store";
-import { DEFAULT_ENTREPRISE_THEME, ENTREPRISE_THEMES } from "./themes";
+import { apercuDepuisCouleur } from "./theme-from-color";
+import { DEFAULT_ENTREPRISE_THEME, ENTREPRISE_THEMES, THEME_AUTO } from "./themes";
 
 /**
  * Choix du thème de l'espace entreprise.
@@ -18,6 +19,17 @@ import { DEFAULT_ENTREPRISE_THEME, ENTREPRISE_THEMES } from "./themes";
 export function ThemePicker() {
   const { entreprise, update, saving, saveError } = useEntreprise();
   const courant = entreprise.theme ?? DEFAULT_ENTREPRISE_THEME;
+
+  /*
+   * Le thème automatique n'est proposé que si une couleur a bien été relevée
+   * dans le logo. Sans elle il n'y a rien à calculer — mieux vaut ne pas
+   * afficher la tuile que d'en afficher une qui, choisie, ne changerait rien.
+   * Cas concret : un logo strictement noir et blanc, ou un compte créé avant
+   * que le logo ne devienne obligatoire.
+   */
+  const apercuAuto = entreprise.themeCouleur
+    ? apercuDepuisCouleur({ couleur: entreprise.themeCouleur, accent: entreprise.themeAccent })
+    : null;
   // Le thème cliqué, le temps de l'enregistrement : la coche suit la main tout
   // de suite, et revient d'elle-même si l'API refuse.
   const [enCours, setEnCours] = useState<EntrepriseThemeId | null>(null);
@@ -30,12 +42,23 @@ export function ThemePicker() {
     setEnCours(null);
   };
 
+  // Le thème calculé passe en tête : c'est celui que le compte porte depuis son
+  // inscription, et celui que l'entreprise cherchera à retrouver.
+  const tuiles = [
+    ...(apercuAuto
+      ? [{ id: THEME_AUTO, label: "Vos couleurs", apercu: apercuAuto, auto: true }]
+      : []),
+    ...ENTREPRISE_THEMES.map((theme) => ({ ...theme, auto: false })),
+  ];
+
   return (
     <Card>
       <CardHeader className="flex-col items-start gap-1">
         <CardTitle id="theme-entreprise-titre">Thème de l&apos;espace</CardTitle>
         <p className="text-sm text-on-surface-variant">
-          Choisissez les couleurs de votre espace entreprise. Le changement est immédiat.
+          {apercuAuto
+            ? "Votre espace reprend les couleurs de votre logo. Vous pouvez lui préférer une palette prête à l'emploi — le changement est immédiat."
+            : "Choisissez les couleurs de votre espace entreprise. Le changement est immédiat."}
         </p>
       </CardHeader>
       <CardBody className="space-y-4">
@@ -45,7 +68,7 @@ export function ThemePicker() {
           aria-labelledby="theme-entreprise-titre"
           className="grid grid-cols-2 gap-3 sm:grid-cols-3"
         >
-          {ENTREPRISE_THEMES.map((theme) => {
+          {tuiles.map((theme) => {
             const actif = theme.id === selection;
             return (
               <label
@@ -78,6 +101,9 @@ export function ThemePicker() {
                     />
                   )}
                 </span>
+                {theme.auto && (
+                  <span className="-mt-2 text-xs text-on-surface-variant">D&apos;après votre logo</span>
+                )}
               </label>
             );
           })}

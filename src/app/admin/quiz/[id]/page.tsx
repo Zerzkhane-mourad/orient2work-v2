@@ -22,6 +22,7 @@ import {
   RetourLien,
 } from "@/components/ui";
 import { TestQuestionsEditor } from "@/features/admin/test-questions-editor";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import { useApi, useMutation } from "@/lib/api/use-api";
 import { formatDate } from "@/lib/utils";
@@ -32,6 +33,9 @@ export default function AdminTestDetailPage({ params }: { params: Promise<{ id: 
   const [deleting, setDeleting] = useState(false);
 
   const { data: test, loading, error, refetch, setData } = useApi(() => api.admin.test(id), [id]);
+
+  // La fiche — énoncés et corrigé compris — reste lisible avec `tests:read`.
+  const peutEcrire = useCan("tests:write");
 
   const modifier = useMutation(api.admin.updateTest);
   const supprimer = useMutation(api.admin.deleteTest);
@@ -100,25 +104,30 @@ export default function AdminTestDetailPage({ params }: { params: Promise<{ id: 
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-col gap-2 sm:w-52">
-            <ButtonLink href={`/admin/quiz/${test.id}/modifier`} variant="secondary">
-              <Icon name="edit" className="text-[18px]" /> Modifier
-            </ButtonLink>
-            <Button variant="outline" disabled={pending} onClick={() => void basculerActive()}>
-              <Icon name={test.active ? "visibility_off" : "visibility"} className="text-[18px]" />
-              {test.active ? "Désactiver" : "Réactiver"}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={pending}
-              onClick={() => {
-                supprimer.reset();
-                setDeleting(true);
-              }}
-            >
-              <Icon name="delete" className="text-[18px]" /> Supprimer
-            </Button>
-          </div>
+          {peutEcrire && (
+            <div className="flex shrink-0 flex-col gap-2 sm:w-52">
+              <ButtonLink href={`/admin/quiz/${test.id}/modifier`} variant="secondary">
+                <Icon name="edit" className="text-[18px]" /> Modifier
+              </ButtonLink>
+              <Button variant="outline" disabled={pending} onClick={() => void basculerActive()}>
+                <Icon
+                  name={test.active ? "visibility_off" : "visibility"}
+                  className="text-[18px]"
+                />
+                {test.active ? "Désactiver" : "Réactiver"}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={pending}
+                onClick={() => {
+                  supprimer.reset();
+                  setDeleting(true);
+                }}
+              >
+                <Icon name="delete" className="text-[18px]" /> Supprimer
+              </Button>
+            </div>
+          )}
         </CardBody>
       </Card>
 

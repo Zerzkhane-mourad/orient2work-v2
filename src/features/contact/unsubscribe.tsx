@@ -7,9 +7,8 @@
  * quelqu'un d'autre en connaissant seulement son adresse.
  */
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Card, CardBody, Icon, LoadingState } from "@/components/ui";
+import { ButtonLink, Card, CardBody, Icon, LoadingState } from "@/components/ui";
 import { api } from "@/lib/api";
 import { ApiError, humanizeError } from "@/lib/api/errors";
 
@@ -71,12 +70,9 @@ export function UnsubscribeNewsletter() {
           </p>
         </div>
 
-        <Link
-          href="/"
-          className="inline-flex items-center rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-on-primary"
-        >
+        <ButtonLink href="/" variant="primary">
           Retour à l&apos;accueil
-        </Link>
+        </ButtonLink>
       </CardBody>
     </Card>
   );

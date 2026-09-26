@@ -9,6 +9,11 @@
  */
 import { Role } from "@prisma/client";
 import { env } from "../config/env.js";
+import {
+  formatNumeroCertificat,
+  partsDateCertificat,
+  referenceCertificat,
+} from "../domain/certificat.js";
 import { ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { renderCertificat } from "../lib/certificat-pdf.js";
 import type { Actor } from "../middlewares/authorize.js";
@@ -64,7 +69,7 @@ function toDto(progress: ProgressCertifiee, numero: number): CertificatDto {
   return {
     formationId: progress.formationId,
     formation: progress.formation.titre,
-    reference: `O2W-CERT-${dateParts(date).annee}-${formatNumero(numero)}`,
+    reference: referenceCertificat(numero, date, env.APP_TIMEZONE),
     delivreLe: date.toISOString(),
     url: `${env.API_PREFIX}/formations/${progress.formationId}/certificat`,
   };
@@ -75,21 +80,11 @@ function delivrance(progress: ProgressCertifiee): Date {
   return progress.valideAt ?? progress.updatedAt;
 }
 
-function formatNumero(numero: number): string {
-  return String(numero).padStart(5, "0");
-}
+const formatNumero = formatNumeroCertificat;
 
 /** Jour, mois, année dans le fuseau de l'application, pas celui du serveur. */
 function dateParts(date: Date): { jour: string; mois: string; annee: string } {
-  const parts = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: env.APP_TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return { jour: get("day"), mois: get("month"), annee: get("year") };
+  return partsDateCertificat(date, env.APP_TIMEZONE);
 }
 
 function slug(text: string): string {

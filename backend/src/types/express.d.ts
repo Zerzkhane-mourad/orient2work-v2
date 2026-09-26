@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import type { Permission } from "../domain/permissions.js";
 
 declare global {
   namespace Express {
@@ -13,6 +14,11 @@ declare global {
 
     interface Request {
       user?: AuthenticatedUser;
+      /**
+       * Permissions d'administration, résolues à la demande par
+       * `requirePermission` puis mémorisées pour la durée de la requête.
+       */
+      permissions?: Permission[];
       /** Données validées par zod — les seules que les contrôleurs doivent lire. */
       validated?: {
         body?: unknown;

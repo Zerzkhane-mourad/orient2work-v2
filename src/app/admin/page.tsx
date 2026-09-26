@@ -54,6 +54,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { CarteATraiter, CarteEntretiens, CarteProfil } from "@/features/admin/dashboard-rail";
 import { DashboardSearch } from "@/features/admin/dashboard-search";
+import { usePermissions } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/api/use-api";
 import { compterParJour, semaineCourante } from "@/lib/semaine";
@@ -98,7 +99,25 @@ function LigneModeration({
 }
 
 export default function AdminDashboard() {
-  const stats = useApi(() => api.admin.stats(), []);
+  /*
+   * Le tableau de bord est la page d'arrivée de TOUS les administrateurs, quel
+   * que soit leur rôle — il n'exige donc aucune permission par lui-même. Chaque
+   * bloc, en revanche, tire ses données d'une route gouvernée : un modérateur
+   * des contenus n'a pas accès aux comptes.
+   *
+   * La requête n'est pas lancée puis rattrapée en erreur, elle est SAUTÉE.
+   * Appeler pour recevoir un 403 remplirait le journal du serveur de refus
+   * attendus, et ferait clignoter un bloc avant de le remplacer par un message.
+   * Un bloc dont on n'a pas les droits n'existe simplement pas à l'écran.
+   */
+  const { can } = usePermissions();
+  const voitStats = can("statistiques:read");
+  const voitJeunes = can("jeunes:read");
+  const voitEntreprises = can("entreprises:read");
+  const voitOffres = can("offres:read");
+  const voitEntretiens = can("entretiens:read");
+
+  const stats = useApi(() => (voitStats ? api.admin.stats() : Promise.resolve(null)), [voitStats]);
 
   /*
    * Bornes figées au montage : identiques en valeur si on les recalculait à
@@ -108,26 +127,37 @@ export default function AdminDashboard() {
   const jours = useMemo(() => semaineCourante(), []);
   const entretiensSemaine = useApi(
     () =>
-      api.entretiens.list({
-        from: jours[0]!.iso,
-        to: jours[6]!.iso,
-        ordre: "asc",
-        perPage: ENTRETIENS_SEMAINE_MAX,
-      }),
-    [jours],
+      voitEntretiens
+        ? api.entretiens.list({
+            from: jours[0]!.iso,
+            to: jours[6]!.iso,
+            ordre: "asc",
+            perPage: ENTRETIENS_SEMAINE_MAX,
+          })
+        : Promise.resolve(null),
+    [jours, voitEntretiens],
   );
   // Les files d'attente sont dérivées de comptages réels plutôt que codées en dur.
   const jeunesAExaminer = useApi(
-    () => api.admin.jeunes({ status: "en_attente_test", perPage: 1 }),
-    [],
+    () =>
+      voitJeunes
+        ? api.admin.jeunes({ status: "en_attente_test", perPage: 1 })
+        : Promise.resolve(null),
+    [voitJeunes],
   );
   const entreprisesEnAttente = useApi(
-    () => api.admin.entreprises({ status: "attente_validation", perPage: APERCU }),
-    [],
+    () =>
+      voitEntreprises
+        ? api.admin.entreprises({ status: "attente_validation", perPage: APERCU })
+        : Promise.resolve(null),
+    [voitEntreprises],
   );
   const offresEnAttente = useApi(
-    () => api.admin.offres({ status: "attente_validation", perPage: APERCU }),
-    [],
+    () =>
+      voitOffres
+        ? api.admin.offres({ status: "attente_validation", perPage: APERCU })
+        : Promise.resolve(null),
+    [voitOffres],
   );
 
   const s = stats.data;
@@ -143,26 +173,31 @@ export default function AdminDashboard() {
   const totalSemaine = entretiensSemaine.data?.meta.total ?? 0;
   const semaineTronquee = totalSemaine > (entretiensSemaine.data?.items.length ?? 0);
 
+  /*
+   * Seules les files que l'administrateur peut effectivement traiter : une
+   * ligne « 4 entreprises à valider » menant à un écran refusé est pire
+   * qu'absente — elle promet une action impossible.
+   */
   const files = [
-    {
+    voitEntreprises && {
       icone: "business" as IconName,
       libelle: "Entreprises à valider",
       count: entreprisesEnAttente.data?.meta.total ?? 0,
       href: "/admin/entreprises",
     },
-    {
+    voitOffres && {
       icone: "work" as IconName,
       libelle: "Offres à modérer",
       count: offresEnAttente.data?.meta.total ?? 0,
       href: "/admin/offres",
     },
-    {
+    voitJeunes && {
       icone: "school" as IconName,
       libelle: "Comptes en attente de test",
       count: jeunesAExaminer.data?.meta.total ?? 0,
       href: "/admin/jeunes",
     },
-  ];
+  ].filter((file) => file !== false);
 
   /*
    * Les cinq étapes du parcours, dans l'ordre — d'où la rampe ORDINALE : la
@@ -246,6 +281,7 @@ export default function AdminDashboard() {
           <DashboardSearch />
         </div>
 
+        {voitStats && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {stats.loading || !s ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)
@@ -283,12 +319,14 @@ export default function AdminDashboard() {
             </>
           )}
         </div>
+        )}
 
         {/*
           Le seul graphique de l'écran dont l'axe soit le TEMPS.
           `semaine.ts` explique pourquoi la fenêtre est la semaine calendaire et
           non les sept derniers jours.
         */}
+        {voitEntretiens && (
         <Card>
           <CardHeader>
             <CardTitle>Entretiens de la semaine</CardTitle>
@@ -328,7 +366,9 @@ export default function AdminDashboard() {
             )}
           </CardBody>
         </Card>
+        )}
 
+        {voitStats && (
         <Card>
           <CardHeader>
             <CardTitle>Parcours candidat</CardTitle>
@@ -355,7 +395,9 @@ export default function AdminDashboard() {
             )}
           </CardBody>
         </Card>
+        )}
 
+        {voitStats && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -394,6 +436,7 @@ export default function AdminDashboard() {
             </CardBody>
           </Card>
         </div>
+        )}
 
       </div>
 
@@ -413,14 +456,18 @@ export default function AdminDashboard() {
        */}
       <aside className="space-y-6 self-start">
         <CarteProfil />
-        <CarteATraiter
-          files={files}
-          loading={
-            entreprisesEnAttente.loading || offresEnAttente.loading || jeunesAExaminer.loading
-          }
-        />
-        <CarteEntretiens />
+        {/* Aucune file traitable : la carte n'aurait rien à montrer. */}
+        {files.length > 0 && (
+          <CarteATraiter
+            files={files}
+            loading={
+              entreprisesEnAttente.loading || offresEnAttente.loading || jeunesAExaminer.loading
+            }
+          />
+        )}
+        {voitEntretiens && <CarteEntretiens />}
 
+        {voitEntreprises && (
         <Card>
           <CardHeader>
             <CardTitle>Entreprises à valider</CardTitle>
@@ -453,7 +500,9 @@ export default function AdminDashboard() {
             )}
           </CardBody>
         </Card>
+        )}
 
+        {voitOffres && (
         <Card>
           <CardHeader>
             <CardTitle>Offres à modérer</CardTitle>
@@ -484,6 +533,7 @@ export default function AdminDashboard() {
             )}
           </CardBody>
         </Card>
+        )}
       </aside>
     </div>
   );

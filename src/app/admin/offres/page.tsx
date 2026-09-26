@@ -27,6 +27,7 @@ import {
   TableEmpty,
   TableSkeleton,
 } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiOffre, OffreStatus } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -60,6 +61,10 @@ export default function AdminOffresPage() {
 }
 
 function Contenu() {
+  // La file de modération reste consultable avec `offres:read` ; seules les
+  // décisions de modération sont masquées.
+  const peutEcrire = useCan("offres:write");
+
   const { valeurs, definir, reinitialiser, actifs } = useFiltresUrl(FILTRES);
   const query = valeurs.q;
   const status = valeurs.status as OffreStatus | "";
@@ -177,7 +182,7 @@ function Contenu() {
                         >
                           <Icon name="visibility" className="text-[18px]" />
                         </ButtonLink>
-                        {o.status !== "publiee" && (
+                        {peutEcrire && o.status !== "publiee" && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -187,7 +192,7 @@ function Contenu() {
                             Publier
                           </Button>
                         )}
-                        {o.status !== "desactivee" && (
+                        {peutEcrire && o.status !== "desactivee" && (
                           <Button
                             variant="outline"
                             size="sm"

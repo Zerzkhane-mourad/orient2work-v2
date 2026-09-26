@@ -27,6 +27,7 @@ import {
   TableEmpty,
   TableSkeleton,
 } from "@/features/admin/admin-table";
+import { useCan } from "@/features/auth/use-permissions";
 import { api } from "@/lib/api";
 import type { ApiEntreprise, EntrepriseStatus } from "@/lib/api/types";
 import { useApi, useMutation } from "@/lib/api/use-api";
@@ -58,6 +59,10 @@ export default function AdminEntreprisesPage() {
 }
 
 function Contenu() {
+  // La consultation reste ouverte à `entreprises:read` ; seules les actions de
+  // validation sont masquées, faute de quoi elles partiraient en 403 au clic.
+  const peutEcrire = useCan("entreprises:write");
+
   const { valeurs, definir, reinitialiser, actifs } = useFiltresUrl(FILTRES);
   const query = valeurs.q;
   const status = valeurs.status as EntrepriseStatus | "";
@@ -183,7 +188,7 @@ function Contenu() {
                         {/* Contour plutôt que plein : voir la note de la liste
                             des jeunes — un aplat d'or répété à chaque ligne
                             écrase la colonne des statuts. */}
-                        {e.status !== "valide" && (
+                        {peutEcrire && e.status !== "valide" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -193,7 +198,7 @@ function Contenu() {
                             Valider
                           </Button>
                         )}
-                        {e.status !== "refuse" && e.status !== "suspendu" && (
+                        {peutEcrire && e.status !== "refuse" && e.status !== "suspendu" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -206,7 +211,7 @@ function Contenu() {
                             Refuser
                           </Button>
                         )}
-                        {e.status === "valide" && (
+                        {peutEcrire && e.status === "valide" && (
                           <button
                             type="button"
                             disabled={pending}

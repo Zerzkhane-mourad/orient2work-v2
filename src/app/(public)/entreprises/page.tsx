@@ -39,6 +39,10 @@ import { QUIZ_PASS_SCORE } from "@/lib/constants";
 export const metadata: Metadata = {
   title: "Pour les entreprises",
   description: "Publiez vos offres, consultez des profils vérifiés et gérez vos entretiens.",
+  openGraph: {
+    title: "Pour les entreprises | Orient2Work by OMB",
+    description: "Publiez vos offres, consultez des profils vérifiés et gérez vos entretiens.",
+  },
 };
 
 const ETAPES = [

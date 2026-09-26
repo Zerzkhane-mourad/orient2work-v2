@@ -9,10 +9,14 @@ export const metadata: Metadata = {
 
 export default function DesinscriptionNewsletterPage() {
   return (
-    <div className="mx-auto max-w-lg px-margin-mobile py-24">
-      <Suspense fallback={<LoadingState />}>
-        <UnsubscribeNewsletter />
-      </Suspense>
-    </div>
+    // Même lavis remonté sous l'en-tête que les autres pages publiques ; la
+    // hauteur minimale empêche le pied de page de remonter sous une carte seule.
+    <section className="-mt-20 flex min-h-[80vh] items-center bg-surface-container-low pb-24 pt-40">
+      <div className="mx-auto w-full max-w-lg px-margin-mobile">
+        <Suspense fallback={<LoadingState />}>
+          <UnsubscribeNewsletter />
+        </Suspense>
+      </div>
+    </section>
   );
 }

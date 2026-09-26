@@ -38,6 +38,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { useApi, useMutation } from "@/lib/api/use-api";
+import { useCan } from "@/features/auth/use-permissions";
 import { api, type ApiError } from "@/lib/api";
 import type { ApiFaqAdmin } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,10 @@ function brouillonValide(brouillon: Brouillon): boolean {
 }
 
 export function FaqManager() {
+  // La liste complète — masquées comprises — reste lisible avec `faq:read` ;
+  // seules les écritures sont retirées de l'écran.
+  const peutEcrire = useCan("faq:write");
+
   const { data, loading, error, refetch, setData } = useApi(() => api.faq.liste(), []);
   const questions: ApiFaqAdmin[] = data ?? [];
 
@@ -165,9 +170,11 @@ export function FaqManager() {
         title="Questions fréquentes"
         subtitle="Ce que voient les visiteurs sur la page d'accueil, dans cet ordre."
         actions={
-          <Button variant="secondary" onClick={openCreate}>
-            <Icon name="add" className="text-[18px]" /> Nouvelle question
-          </Button>
+          peutEcrire && (
+            <Button variant="secondary" onClick={openCreate}>
+              <Icon name="add" className="text-[18px]" /> Nouvelle question
+            </Button>
+          )
         }
       />
 
@@ -186,9 +193,11 @@ export function FaqManager() {
           title="Aucune question pour le moment"
           description="Tant que cette liste est vide, la rubrique n'apparaît pas sur la page d'accueil."
           action={
-            <Button variant="secondary" onClick={openCreate}>
-              <Icon name="add" className="text-[18px]" /> Ajouter la première question
-            </Button>
+            peutEcrire ? (
+              <Button variant="secondary" onClick={openCreate}>
+                <Icon name="add" className="text-[18px]" /> Ajouter la première question
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -214,7 +223,9 @@ export function FaqManager() {
                     <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
                       <button
                         type="button"
-                        disabled={pending || index === 0}
+                        // Réordonner est une écriture comme une autre : sans le
+                        // droit, les flèches sont inertes.
+                        disabled={pending || !peutEcrire || index === 0}
                         onClick={() => void deplacerQuestion(faq.id, "haut")}
                         className="rounded p-1 text-on-surface-variant hover:bg-surface-container disabled:opacity-30"
                         aria-label={`Monter « ${faq.question} »`}
@@ -227,7 +238,7 @@ export function FaqManager() {
                       </span>
                       <button
                         type="button"
-                        disabled={pending || index === questions.length - 1}
+                        disabled={pending || !peutEcrire || index === questions.length - 1}
                         onClick={() => void deplacerQuestion(faq.id, "bas")}
                         className="rounded p-1 text-on-surface-variant hover:bg-surface-container disabled:opacity-30"
                         aria-label={`Descendre « ${faq.question} »`}
@@ -257,35 +268,42 @@ export function FaqManager() {
                         {faq.reponse}
                       </p>
 
-                      <div className="mt-4 flex flex-wrap gap-1">
-                        <Button variant="ghost" size="sm" disabled={pending} onClick={() => openEdit(faq)}>
-                          <Icon name="edit" className="text-[18px]" /> Modifier
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pending}
-                          onClick={() => void basculerPublication(faq)}
-                        >
-                          <Icon
-                            name={faq.publiee ? "visibility_off" : "visibility"}
-                            className="text-[18px]"
-                          />
-                          {faq.publiee ? "Masquer" : "Publier"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={pending}
-                          className="text-error hover:bg-error-container"
-                          onClick={() => {
-                            remove.reset();
-                            setDeleting(faq);
-                          }}
-                        >
-                          <Icon name="delete" className="text-[18px]" /> Supprimer
-                        </Button>
-                      </div>
+                      {peutEcrire && (
+                        <div className="mt-4 flex flex-wrap gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={pending}
+                            onClick={() => openEdit(faq)}
+                          >
+                            <Icon name="edit" className="text-[18px]" /> Modifier
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={pending}
+                            onClick={() => void basculerPublication(faq)}
+                          >
+                            <Icon
+                              name={faq.publiee ? "visibility_off" : "visibility"}
+                              className="text-[18px]"
+                            />
+                            {faq.publiee ? "Masquer" : "Publier"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={pending}
+                            className="text-error hover:bg-error-container"
+                            onClick={() => {
+                              remove.reset();
+                              setDeleting(faq);
+                            }}
+                          >
+                            <Icon name="delete" className="text-[18px]" /> Supprimer
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardBody>
                 </Card>

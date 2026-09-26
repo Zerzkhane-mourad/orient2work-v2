@@ -51,10 +51,69 @@ export interface User {
   id: string;
   email: string;
   role: Role;
+  /** Nom d'affichage ; présent pour les comptes d'administration uniquement. */
+  nom?: string;
   emailVerified: boolean;
   createdAt: string;
   /** Id du profil Jeune / Entreprise ; `null` pour un admin. */
   profileId: string | null;
+  /**
+   * Permissions d'administration ; vide pour un jeune ou une entreprise.
+   *
+   * Sert à masquer les écrans inaccessibles. Comme `RequireRole`, c'est du
+   * confort : le serveur refait le contrôle sur chaque requête, à partir de la
+   * base et non de ce tableau.
+   */
+  permissions: Permission[];
+}
+
+// ── Rôles et permissions d'administration ────────────────────────────────────
+
+/**
+ * Code de permission, `<ressource>:<action>`.
+ *
+ * Volontairement une `string` et non une union recopiée du backend : le
+ * catalogue fait autorité côté serveur et arrive par `GET /admin/permissions`.
+ * Le dupliquer ici créerait deux listes à maintenir, dont l'une mentirait au
+ * premier ajout. Les écrans n'ont pas besoin de connaître les codes — ils
+ * affichent ceux qu'on leur envoie.
+ */
+export type Permission = string;
+
+/** Un domaine de la matrice de permissions — l'ordre du serveur est celui de l'écran. */
+export interface ApiPermissionGroup {
+  cle: string;
+  libelle: string;
+  description: string;
+  permissions: { code: Permission; libelle: string }[];
+}
+
+export interface ApiRoleAdmin {
+  id: string;
+  nom: string;
+  description: string;
+  /** Permissions EFFECTIVES : un rôle système renvoie le catalogue entier. */
+  permissions: Permission[];
+  /** Rôle fondateur : permissions non modifiables, suppression refusée. */
+  systeme: boolean;
+  /** Comptes rattachés — conditionne la suppression. */
+  utilisateurs: number;
+  createdAt: string;
+}
+
+/** Rôle tel qu'embarqué dans une ligne d'annuaire. */
+export type ApiRoleAdminBrief = Pick<ApiRoleAdmin, "id" | "nom" | "systeme">;
+
+export interface ApiUtilisateurAdmin {
+  id: string;
+  email: string;
+  nom: string;
+  /** `null` pour un compte sans rôle : il n'a alors accès à aucun écran. */
+  role: ApiRoleAdminBrief | null;
+  actif: boolean;
+  /** `null` tant que le compte ne s'est jamais connecté. */
+  lastLoginAt: string | null;
+  createdAt: string;
 }
 
 export interface AuthSession {
@@ -112,6 +171,34 @@ export interface ApiLien {
   url: string;
 }
 
+/**
+ * Formation suivie sur la plateforme, telle qu'un recruteur la lit.
+ *
+ * Le profil n'exposait que des identifiants : la fiche talent ne pouvait
+ * afficher qu'un compte — « 3 formation(s) validée(s) » — sans jamais dire
+ * lesquelles.
+ */
+export interface ApiFormationSuivie {
+  /** Identifiant de la FORMATION. */
+  id: string;
+  titre: string;
+  categorie: string;
+  niveau?: string;
+  /** La formation délivre un certificat à qui réussit son quiz. */
+  certifiante: boolean;
+  tempsLectureMin: number;
+  /** Avancement de lecture, 0–100. */
+  progression: number;
+  lu: boolean;
+  /** Quiz réussi — c'est ce qui fait la formation « validée ». */
+  valide: boolean;
+  meilleurScore?: number;
+  /** ISO — date de réussite du quiz. */
+  valideAt?: string;
+  /** Référence du certificat, `O2W-CERT-2026-00042`, quand il a été délivré. */
+  certificat?: string;
+}
+
 export interface ApiJeune {
   id: string;
   prenom: string;
@@ -144,6 +231,14 @@ export interface ApiJeune {
   formationsValidees: string[];
   scoresFormations: Record<string, number>;
   formationsCompletees: number;
+  /**
+   * Parcours de formation détaillé, validées d'abord.
+   *
+   * Double emploi assumé avec les trois champs ci-dessus : ce sont des index
+   * par identifiant, consommés par le calcul de score ; celui-ci est une LISTE
+   * lisible, pour l'affichage.
+   */
+  formations: ApiFormationSuivie[];
   candidatures: number;
   /** Score d'employabilité dérivé (0–100). */
   score: number;
@@ -168,10 +263,20 @@ export interface ApiEntreprise {
   status: EntrepriseStatus;
   /** Palette de l'espace entreprise — voir `features/entreprise/themes.ts`. */
   theme: EntrepriseThemeId;
+  /**
+   * Couleur principale relevée dans le logo, en hexadécimal. Source du thème
+   * « auto ». Absente pour les comptes créés avant que le logo ne devienne
+   * obligatoire à l'inscription.
+   */
+  themeCouleur?: string;
+  /** Couleur d'accent du logo, si le logo en contient une seconde. */
+  themeAccent?: string;
   offresPubliees: number;
 }
 
 export type EntrepriseThemeId =
+  /** Palette calculée à partir des couleurs du logo. */
+  | "auto"
   | "marine"
   | "emeraude"
   | "ocean"
@@ -181,7 +286,7 @@ export type EntrepriseThemeId =
 
 export type ApiEntreprisePublic = Omit<
   ApiEntreprise,
-  "responsable" | "emailResponsable" | "telephone" | "theme"
+  "responsable" | "emailResponsable" | "telephone" | "theme" | "themeCouleur" | "themeAccent"
 >;
 
 // ── Offre ────────────────────────────────────────────────────────────────────
@@ -218,12 +323,24 @@ export interface ApiCandidature {
   message?: string;
   createdAt: string;
   vueLe?: string;
+  /**
+   * Statut du dernier entretien proposé sur cette candidature. Le statut
+   * `entretien` de la candidature ne change pas à la réponse : c'est ce champ
+   * qui dit si une réponse est encore attendue.
+   */
+  entretienStatus?: EntretienStatus;
   offre: {
     id: string;
     titre: string;
     type: string;
     ville: string;
     mode: string;
+    niveauDemande: string;
+    filiere: string;
+    competences: string[];
+    /** Début de la description, déjà abrégé par le serveur. */
+    apercu: string;
+    nombrePostes: number;
     dateLimite: string;
     entreprise: { id: string; nom: string; logo?: string; ville: string };
   };
@@ -578,6 +695,15 @@ export interface ApiDisponibilites {
   dates: ApiDateProgrammee[];
 }
 
+/** Réservation active du candidat auprès d'une entreprise. */
+export interface ApiDemandeSpontanee {
+  id: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  heure: string;
+  status: "en_attente" | "accepte";
+}
+
 /** Entreprise ouverte aux candidatures spontanées, vue par le jeune. */
 export interface ApiEntrepriseOuverte {
   id: string;
@@ -591,6 +717,13 @@ export interface ApiEntrepriseOuverte {
   journeesOuvertes: number;
   /** Première journée ouverte, `YYYY-MM-DD` ; `null` s'il n'en reste aucune. */
   prochaineDate: string | null;
+  /**
+   * Demande déjà posée chez cette entreprise, s'il y en a une.
+   *
+   * Renseigné en LISTE seulement : sur la fiche, la même information vit au
+   * niveau du calendrier (`ApiCalendrierSpontanee.demandeEnCours`).
+   */
+  demandeEnCours?: ApiDemandeSpontanee | null;
 }
 
 export interface ApiJourneeCreneaux {
@@ -604,12 +737,7 @@ export interface ApiCalendrierSpontanee {
   entreprise: ApiEntrepriseOuverte;
   journees: ApiJourneeCreneaux[];
   /** Demande en attente, ou entretien accepté à venir, auprès de cette entreprise. */
-  demandeEnCours: {
-    id: string;
-    date: string;
-    heure: string;
-    status: "en_attente" | "accepte";
-  } | null;
+  demandeEnCours: ApiDemandeSpontanee | null;
 }
 
 // ── Recherche globale ────────────────────────────────────────────────────────
